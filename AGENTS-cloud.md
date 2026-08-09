@@ -67,3 +67,13 @@ Do not edit the generated `main.js` directly.
 2. Run `git diff --check`.
 3. Review the complete scoped diff for unrelated changes, secrets, and stale URLs.
 4. Report checks that were not run or did not pass.
+
+## Cursor Cloud specific instructions
+
+Durable, non-obvious notes for cloud agents. Standard commands live in the `## Commands` table above; do not duplicate them.
+
+- Install with `npm install`, not `npm ci`. On the cloud VM's npm (10.9.x) `npm ci` fails with `EBADPLATFORM` on esbuild's optional platform packages (e.g. `@esbuild/aix-ppc64`). `npm install` resolves only the current platform's optional deps and works.
+- `npm install` may show `package-lock.json` as modified (it strips `libc` fields the newer lockfile format added). This churn comes from the npm version difference, not from any code change — leave it out of commits.
+- There is no linter/formatter configured. `git diff --check` (whitespace) is the only "lint" step.
+- The Obsidian desktop app cannot run in the headless cloud VM, so there is no GUI/end-to-end runtime here. Verify changes with `npm test` (Vitest) and `npm run build` (tsc `--noEmit` + esbuild). The pure, unit-testable core lives in `src/folder-order.ts`; the Obsidian-coupled UI is in `src/view.ts` / `src/main.ts`.
+- `main.js` is a generated, gitignored esbuild bundle — never edit it by hand. `npm run dev` watches `src/` and rebuilds `main.js` on save.
