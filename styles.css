@@ -154,6 +154,21 @@
 	color: var(--nav-item-color-active, var(--text-normal));
 }
 
+.alternative-explorer-pin-toggle.is-active {
+	color: var(--text-on-accent, #fff);
+	background-color: var(--interactive-accent);
+}
+
+.alternative-explorer-pin-toggle.is-active svg {
+	fill: currentColor;
+	stroke: currentColor;
+}
+
+.alternative-explorer-pin-toggle.is-active:hover {
+	color: var(--text-on-accent, #fff);
+	background-color: var(--interactive-accent-hover, var(--interactive-accent));
+}
+
 .alternative-explorer-section {
 	padding-top: 6px;
 }
