@@ -5,6 +5,7 @@ main.js.map
 *.log
 
 # Local agent configuration and internal workflow files
+# AGENTS-cloud.md is intentionally tracked (public/cloud agent entry)
 AGENTS.md
 CLAUDE.md
 .agents/
