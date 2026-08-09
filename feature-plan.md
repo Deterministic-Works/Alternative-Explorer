@@ -54,8 +54,8 @@ When viewing a folder’s notes, a toggle chooses depth:
 ### 5. Sidebar presentation
 
 - Opens in the left sidebar by default.
-- Folder rows are compact and indented by depth; the active notes scope uses stronger type weight only.
-- Layout is dense and narrow (sidebar chrome), not a centered document page.
+- Visuals inherit the active Obsidian theme: transparent pane background, `--nav-item-*` colors/hover/active states, no plugin-owned surface colors.
+- Folder rows are compact and indented by depth, matching the native file explorer density.
 
 ## Interaction model (summary)
 
