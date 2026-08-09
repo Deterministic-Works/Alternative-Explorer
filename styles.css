@@ -156,14 +156,17 @@
 	padding: 0;
 }
 
+.alternative-explorer-file-list {
+	gap: 4px;
+	padding: 2px 8px 8px;
+}
+
 .alternative-explorer-folder-row,
 .alternative-explorer-file-row {
 	position: relative;
 	width: 100%;
 	min-width: 0;
 	margin: 0;
-	padding: 0;
-	color: var(--nav-item-color, var(--text-muted));
 	text-align: left;
 	border-radius: var(--radius-s);
 	cursor: pointer;
@@ -171,21 +174,30 @@
 
 .alternative-explorer-folder-row {
 	min-height: var(--nav-item-size, 28px);
-	padding-left: calc(8px + var(--folder-depth, 0) * var(--nav-indentation-guide-width, 12px));
-	padding-right: 4px;
+	padding: 0 4px 0 calc(8px + var(--folder-depth, 0) * var(--nav-indentation-guide-width, 12px));
+	color: var(--nav-item-color, var(--text-muted));
 }
 
 .alternative-explorer-file-row {
-	min-height: var(--nav-item-size, 28px);
-	padding-right: 8px;
+	align-items: center;
+	gap: 10px;
+	min-height: 36px;
+	padding: 7px 10px;
+	color: var(--text-normal);
+	background-color: transparent;
+	border: 1px solid var(--background-modifier-border);
 }
 
 .alternative-explorer-folder-row:hover,
-.alternative-explorer-folder-row:focus-within,
-.alternative-explorer-file-row:hover,
-.alternative-explorer-file-row:focus-visible {
+.alternative-explorer-folder-row:focus-within {
 	color: var(--nav-item-color-hover, var(--text-normal));
 	background-color: var(--nav-item-background-hover, var(--background-modifier-hover));
+}
+
+.alternative-explorer-file-row:hover,
+.alternative-explorer-file-row:focus-visible {
+	background-color: var(--nav-item-background-hover, var(--background-modifier-hover));
+	border-color: var(--background-modifier-border-hover, var(--background-modifier-border));
 }
 
 .alternative-explorer-folder-row.is-selected {
@@ -300,6 +312,12 @@
 	white-space: nowrap;
 }
 
+.alternative-explorer-file-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
 .alternative-explorer-folder-meta,
 .alternative-explorer-file-location {
 	overflow: hidden;
@@ -359,13 +377,16 @@
 }
 
 .alternative-explorer-file-row .alternative-explorer-row-icon {
-	padding-left: 8px;
+	flex: 0 0 18px;
+	padding-left: 0;
+	opacity: 0.7;
 }
 
 .alternative-explorer-file-date {
 	flex: 0 0 auto;
-	margin-left: 8px;
-	color: var(--text-faint);
+	margin-left: auto;
+	padding-left: 8px;
+	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 	font-weight: var(--font-normal);
 	white-space: nowrap;
