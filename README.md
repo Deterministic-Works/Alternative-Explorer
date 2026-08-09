@@ -5,8 +5,9 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 ## Features
 
 - Open in the left sidebar from the ribbon or **Alternative Explorer: Open explorer view**.
-- Browse folders in a single pane; tap a folder to switch into its notes list, or use the chevron to drill into subfolders.
-- Use **All notes** at the vault root to see every note (including notes that live in the root).
+- Browse an expandable folder tree; chevron expands nested folders inline, and tapping a folder opens its notes.
+- On a folder’s notes list, toggle **This folder** vs **All below** to include or exclude notes in subfolders.
+- Use **All notes** to see every note (including notes that live in the vault root).
 - Scan notes grouped into Pinned (core Bookmarks), Today, Yesterday, Previous 7 Days, Previous 30 Days, and older months.
 - Drag sibling folder rows to save a custom order across sessions.
 
