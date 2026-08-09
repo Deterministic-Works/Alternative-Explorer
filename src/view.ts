@@ -209,8 +209,7 @@ export class AlternativeExplorerView extends ItemView {
 	): void {
 		const hasSubfolders = child.children.some((entry) => entry instanceof TFolder);
 		const expanded = this.isExpanded(child.path);
-		const selected =
-			this.plugin.settings.pane === "notes" && this.plugin.settings.notesScope === child.path;
+		const selected = this.plugin.settings.notesScope === child.path;
 
 		const row = list.createDiv({
 			cls: `alternative-explorer-folder-row${selected ? " is-selected" : ""}`,
