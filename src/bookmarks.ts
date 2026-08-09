@@ -1,9 +1,20 @@
 import type { App } from "obsidian";
 
-interface BookmarkLike {
-	type?: unknown;
-	path?: unknown;
-	items?: unknown;
+export type BookmarkItem = {
+	type?: string;
+	path?: string;
+	ctime?: number;
+	title?: string;
+	items?: BookmarkItem[];
+	[key: string]: unknown;
+};
+
+export type PinToggleResult = "pinned" | "unpinned";
+
+interface BookmarksPluginInstance {
+	items?: BookmarkItem[];
+	getBookmarks?: () => unknown;
+	requestSave?: () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -13,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function collectFilePaths(items: readonly unknown[], into: Set<string>): void {
 	for (const item of items) {
 		if (!isRecord(item)) continue;
-		const bookmark = item as BookmarkLike;
+		const bookmark = item as BookmarkItem;
 		if (bookmark.type === "file" && typeof bookmark.path === "string" && bookmark.path.length > 0) {
 			into.add(bookmark.path);
 			continue;
@@ -24,34 +35,51 @@ function collectFilePaths(items: readonly unknown[], into: Set<string>): void {
 	}
 }
 
-function readBookmarkItems(app: App): unknown[] {
+function getBookmarksPluginInstance(app: App): BookmarksPluginInstance | null {
 	const internalPlugins = (app as App & {
 		internalPlugins?: {
 			getEnabledPluginById?: (id: string) => unknown;
-			plugins?: Record<string, { instance?: { getBookmarks?: () => unknown } }>;
+			getPluginById?: (id: string) => { instance?: BookmarksPluginInstance } | undefined;
+			plugins?: Record<string, { instance?: BookmarksPluginInstance; enabled?: boolean }>;
 		};
 	}).internalPlugins;
 
 	if (!internalPlugins) {
-		return [];
+		return null;
 	}
 
 	const enabled = internalPlugins.getEnabledPluginById?.("bookmarks") as
-		| { getBookmarks?: () => unknown }
+		| BookmarksPluginInstance
 		| undefined;
-	if (enabled && typeof enabled.getBookmarks === "function") {
-		const bookmarks = enabled.getBookmarks();
-		return Array.isArray(bookmarks) ? bookmarks : [];
+	if (enabled && (Array.isArray(enabled.items) || typeof enabled.getBookmarks === "function")) {
+		return enabled;
+	}
+
+	const fromGetter = internalPlugins.getPluginById?.("bookmarks")?.instance;
+	if (fromGetter && (Array.isArray(fromGetter.items) || typeof fromGetter.getBookmarks === "function")) {
+		return fromGetter;
 	}
 
 	const plugin = internalPlugins.plugins?.bookmarks;
-	const instance = plugin?.instance;
-	if (instance && typeof instance.getBookmarks === "function") {
+	if (plugin?.instance && (Array.isArray(plugin.instance.items) || typeof plugin.instance.getBookmarks === "function")) {
+		return plugin.instance;
+	}
+
+	return null;
+}
+
+function readBookmarkItems(app: App): unknown[] {
+	const instance = getBookmarksPluginInstance(app);
+	if (!instance) {
+		return [];
+	}
+
+	if (typeof instance.getBookmarks === "function") {
 		const bookmarks = instance.getBookmarks();
 		return Array.isArray(bookmarks) ? bookmarks : [];
 	}
 
-	return [];
+	return Array.isArray(instance.items) ? instance.items : [];
 }
 
 /** Returns bookmarked file paths from Obsidian's core Bookmarks plugin. */
@@ -70,4 +98,82 @@ export function collectBookmarkedFilePaths(items: readonly unknown[]): Set<strin
 	const paths = new Set<string>();
 	collectFilePaths(items, paths);
 	return paths;
+}
+
+/** Returns true when any file bookmark matches `path` (including nested groups). */
+export function bookmarkTreeHasFile(items: readonly BookmarkItem[], path: string): boolean {
+	return collectBookmarkedFilePaths(items).has(path);
+}
+
+/**
+ * Removes all file bookmarks matching `path` from the tree (including nested groups).
+ * Returns true if at least one entry was removed.
+ */
+export function removeFileBookmarks(items: BookmarkItem[], path: string): boolean {
+	let removed = false;
+
+	for (let index = items.length - 1; index >= 0; index--) {
+		const item = items[index];
+		if (!item) continue;
+
+		if (item.type === "file" && item.path === path) {
+			items.splice(index, 1);
+			removed = true;
+			continue;
+		}
+
+		if (item.type === "group" && Array.isArray(item.items)) {
+			if (removeFileBookmarks(item.items, path)) {
+				removed = true;
+			}
+		}
+	}
+
+	return removed;
+}
+
+/**
+ * Ensures a root-level file bookmark exists for `path`.
+ * Returns true when a new entry was added.
+ */
+export function addRootFileBookmark(
+	items: BookmarkItem[],
+	path: string,
+	ctime: number = Date.now()
+): boolean {
+	if (bookmarkTreeHasFile(items, path)) {
+		return false;
+	}
+	items.push({ type: "file", path, ctime });
+	return true;
+}
+
+/**
+ * Toggles a file bookmark in Obsidian's core Bookmarks plugin.
+ * Returns null when Bookmarks is unavailable.
+ */
+export function toggleFileBookmark(app: App, path: string): PinToggleResult | null {
+	if (!path) {
+		return null;
+	}
+
+	const instance = getBookmarksPluginInstance(app);
+	if (!instance || !Array.isArray(instance.items)) {
+		return null;
+	}
+
+	try {
+		const items = instance.items;
+		if (bookmarkTreeHasFile(items, path)) {
+			removeFileBookmarks(items, path);
+			instance.requestSave?.();
+			return "unpinned";
+		}
+
+		addRootFileBookmark(items, path);
+		instance.requestSave?.();
+		return "pinned";
+	} catch {
+		return null;
+	}
 }

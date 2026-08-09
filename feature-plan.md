@@ -50,6 +50,7 @@ When viewing a folder’s notes, a toggle chooses depth:
 - Within a section, newest-first.
 - Nested note location is shown when listing recursively or under **All notes**.
 - Selecting a note opens it in the main editor leaf.
+- Right-click a note to **Pin** / **Unpin** (toggles a core Bookmarks file bookmark; requires Bookmarks enabled).
 
 ### 5. Sidebar presentation
 
@@ -61,7 +62,7 @@ When viewing a folder’s notes, a toggle chooses depth:
 
 1. Folders pane: All notes + expandable vault tree; drag to reorder siblings.
 2. Chevron → expand/collapse; folder body → notes pane for that folder.
-3. Notes pane: Back → folders; This folder / All below toggle; Pinned + recency sections; tap note → editor.
+3. Notes pane: Back → folders; This folder / All below toggle; Pinned + recency sections; tap note → editor; right-click note → Pin/Unpin.
 
 ## Out of scope (for now)
 
