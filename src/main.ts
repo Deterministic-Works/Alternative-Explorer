@@ -35,7 +35,11 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh()));
 		this.registerEvent(
 			this.app.vault.on("delete", () => {
-				if (this.ensureCurrentFolderExists()) {
+				let dirty = this.ensureCurrentFolderExists();
+				const before = this.settings.expandedFolders.length;
+				this.pruneExpandedFolders();
+				if (this.settings.expandedFolders.length !== before) dirty = true;
+				if (dirty) {
 					void this.saveSettings();
 				}
 				this.scheduleRefresh();
@@ -70,9 +74,12 @@ export default class AlternativeExplorerPlugin extends Plugin {
 					: defaults.currentFolder,
 			pane: this.parsePane(saved?.pane),
 			notesScope: this.parseNotesScope(saved?.notesScope),
+			recursive: typeof saved?.recursive === "boolean" ? saved.recursive : defaults.recursive,
+			expandedFolders: this.parseExpandedFolders(saved?.expandedFolders),
 			folderOrder: this.parseFolderOrder(saved?.folderOrder),
 		};
 		this.ensureCurrentFolderExists();
+		this.pruneExpandedFolders();
 	}
 
 	async saveSettings(): Promise<void> {
@@ -129,6 +136,9 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		if (this.settings.notesScope !== "all") {
 			this.settings.notesScope = replacePathPrefix(this.settings.notesScope, oldPath, newPath);
 		}
+		this.settings.expandedFolders = this.settings.expandedFolders.map((path) =>
+			replacePathPrefix(path, oldPath, newPath)
+		);
 		const remappedOrder = Object.create(null) as Record<string, string[]>;
 		for (const [parentPath, childPaths] of Object.entries(this.settings.folderOrder)) {
 			const remappedParent = replacePathPrefix(parentPath, oldPath, newPath);
@@ -138,6 +148,18 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		}
 		this.settings.folderOrder = remappedOrder;
 		await this.saveSettings();
+	}
+
+	private pruneExpandedFolders(): void {
+		this.settings.expandedFolders = this.settings.expandedFolders.filter((path) => {
+			const folder = this.app.vault.getAbstractFileByPath(path);
+			return folder instanceof TFolder;
+		});
+	}
+
+	private parseExpandedFolders(value: unknown): string[] {
+		if (!Array.isArray(value)) return [];
+		return value.filter((path): path is string => typeof path === "string" && path.length > 0);
 	}
 
 	private parsePane(value: unknown): ExplorerPane {

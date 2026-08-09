@@ -1,15 +1,15 @@
 # Alternative Explorer — feature plan
 
-Obsidian plugin: a calm, Apple Notes–style sidebar explorer with a single pane that switches between folders and notes.
+Obsidian plugin: a calm, Apple Notes–style sidebar explorer with a single pane that switches between an expandable folder tree and a notes list.
 
-Source note: 2026-08-24; updated for sidebar pane-switch UX.
+Source note: 2026-08-24; updated for expandable folder tree + note depth toggle.
 
 ## Goals
 
 Replace (or sit beside) the default file explorer with a left-sidebar view that:
 
-- Treats folders as destinations that open a notes list (not accordion rows)
-- Switches the same pane between a folder list and a notes list (no stacked two-layer panel)
+- Shows folders as an expandable tree in one pane (not drill-down into a child-only list)
+- Lets any folder (including nested ones) open that folder’s notes in the same pane
 - Groups notes by pinned/bookmarks and recency for easy scanning
 
 ## Features
@@ -17,21 +17,29 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 ### 1. Customizable folder order
 
 - Folders can be ordered manually (not only by name / modified time).
-- Order is changed by drag and drop and persisted across sessions.
+- Order is changed by drag and drop among siblings and persisted across sessions.
 
-### 2. Single-pane folder ↔ notes switching
+### 2. Expandable folder tree + notes switching
 
-- The folders pane lists destinations only (never note rows).
-- At vault root, **All notes** appears first; vault folders follow.
-- Notes that live in the vault root appear only under **All notes**, not in the folders pane.
-- Tapping a folder opens that folder’s notes list in the same pane.
-- The chevron on a folder drills into its subfolder list (folders pane stays active).
-- Back from the notes pane returns to the folders pane.
+- The folders pane always lists the vault from the root as a tree.
+- **All notes** appears first; vault folders follow.
+- Chevron expands/collapses subfolders inline in the same list (persisted).
+- Tapping a folder (at any depth) opens that folder’s notes list in the same pane.
+- Back from the notes pane returns to the folders pane (tree expansion state preserved).
 
-### 3. Readable, dated notes list
+### 3. Note depth toggle
 
-- Notes for a folder are that folder’s direct child files only.
-- **All notes** lists every vault file.
+When viewing a folder’s notes, a toggle chooses depth:
+
+| Mode | Files shown |
+|------|-------------|
+| This folder | Files immediately under the selected folder |
+| All below | All files under the selected folder, including nested subfolders |
+
+- **All notes** still lists every vault file (toggle hidden).
+
+### 4. Readable, dated notes list
+
 - Sections (by modified time), empty ones omitted:
   - **Pinned** — files bookmarked in Obsidian’s core Bookmarks plugin
   - **Today**
@@ -40,18 +48,20 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
   - **Previous 30 Days**
   - Older months (`MMMM YYYY`)
 - Within a section, newest-first.
+- Nested note location is shown when listing recursively or under **All notes**.
 - Selecting a note opens it in the main editor leaf.
 
-### 4. Sidebar presentation
+### 5. Sidebar presentation
 
 - Opens in the left sidebar by default.
+- Folder rows are compact and indented by depth, with accent highlight for the active notes scope.
 - Layout is dense and narrow (sidebar chrome), not a centered document page.
 
 ## Interaction model (summary)
 
-1. Folders pane: Back/breadcrumbs for nested folder navigation; All notes + folders at root.
-2. Folder body → notes pane for that folder; chevron → drill into subfolders.
-3. Notes pane: Back → folders; Pinned + recency sections; tap note → editor.
+1. Folders pane: All notes + expandable vault tree; drag to reorder siblings.
+2. Chevron → expand/collapse; folder body → notes pane for that folder.
+3. Notes pane: Back → folders; This folder / All below toggle; Pinned + recency sections; tap note → editor.
 
 ## Out of scope (for now)
 

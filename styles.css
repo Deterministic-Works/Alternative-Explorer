@@ -16,8 +16,8 @@
 }
 
 .alternative-explorer-navigation,
-.alternative-explorer-breadcrumbs,
 .alternative-explorer-heading,
+.alternative-explorer-title-group,
 .alternative-explorer-section-header,
 .alternative-explorer-section-label,
 .alternative-explorer-folder-row,
@@ -34,18 +34,17 @@
 }
 
 .alternative-explorer-back-button,
-.alternative-explorer-breadcrumbs button,
 .alternative-explorer-folder-button,
-.alternative-explorer-folder-drill,
-.alternative-explorer-file-row {
+.alternative-explorer-folder-toggle,
+.alternative-explorer-file-row,
+.alternative-explorer-mode-toggle button {
 	font: inherit;
 	box-shadow: none;
 }
 
 .alternative-explorer-back-button,
-.alternative-explorer-breadcrumbs button,
 .alternative-explorer-folder-button,
-.alternative-explorer-folder-drill,
+.alternative-explorer-folder-toggle,
 .alternative-explorer-file-row {
 	background: transparent;
 	border: 0;
@@ -78,45 +77,13 @@
 	font-size: var(--font-ui-small);
 }
 
-.alternative-explorer-breadcrumbs {
-	min-width: 0;
-	gap: 2px;
-	overflow: hidden;
-}
-
-.alternative-explorer-breadcrumbs button {
-	min-width: 0;
-	padding: 2px 4px;
-	overflow: hidden;
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	border-radius: var(--radius-s);
-}
-
-.alternative-explorer-breadcrumbs button:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover);
-}
-
-.alternative-explorer-breadcrumbs button[aria-current="page"] {
-	color: var(--text-normal);
-	font-weight: var(--font-medium);
-}
-
-.alternative-explorer-breadcrumb-separator {
-	display: inline-flex;
-	flex: 0 0 auto;
-	color: var(--text-faint);
-}
-
-.alternative-explorer-breadcrumb-separator svg {
-	width: 12px;
-	height: 12px;
-}
-
 .alternative-explorer-heading {
+	justify-content: space-between;
+	gap: 10px;
+	min-width: 0;
+}
+
+.alternative-explorer-title-group {
 	min-width: 0;
 }
 
@@ -129,6 +96,36 @@
 	line-height: 1.3;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.alternative-explorer-mode-toggle {
+	display: inline-flex;
+	flex: 0 0 auto;
+	padding: 2px;
+	background: var(--background-secondary);
+	border-radius: 7px;
+}
+
+.alternative-explorer-mode-toggle button {
+	min-height: 26px;
+	padding: 3px 8px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	background: transparent;
+	border: 0;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.alternative-explorer-mode-toggle button:hover {
+	color: var(--text-normal);
+}
+
+.alternative-explorer-mode-toggle button.is-active {
+	color: var(--text-normal);
+	background: var(--background-primary);
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 }
 
 .alternative-explorer-section {
@@ -162,7 +159,13 @@
 	text-align: center;
 }
 
-.alternative-explorer-folder-list,
+.alternative-explorer-folder-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 2px 6px;
+}
+
 .alternative-explorer-file-list {
 	border-top: 1px solid var(--background-modifier-border);
 }
@@ -172,17 +175,46 @@
 	position: relative;
 	width: 100%;
 	min-width: 0;
-	min-height: 40px;
 	margin: 0;
 	padding: 0;
 	color: var(--text-normal);
 	text-align: left;
+	border-radius: 6px;
+}
+
+.alternative-explorer-folder-row {
+	min-height: 34px;
+	padding-left: calc(var(--folder-depth, 0) * 14px);
+}
+
+.alternative-explorer-file-row {
+	min-height: 40px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	border-radius: 0;
 }
 
 .alternative-explorer-folder-row:hover,
-.alternative-explorer-folder-row:focus-within,
+.alternative-explorer-folder-row:focus-within {
+	background: var(--background-modifier-hover);
+}
+
+.alternative-explorer-folder-row.is-selected {
+	background: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+}
+
+.alternative-explorer-folder-row.is-selected:hover,
+.alternative-explorer-folder-row.is-selected:focus-within {
+	background: color-mix(in srgb, var(--interactive-accent) 24%, transparent);
+}
+
+.alternative-explorer-folder-row.is-selected .alternative-explorer-folder-name {
+	color: var(--interactive-accent);
+}
+
+.alternative-explorer-folder-row.is-selected .alternative-explorer-row-icon {
+	color: var(--interactive-accent);
+}
+
 .alternative-explorer-file-row:hover,
 .alternative-explorer-file-row:focus-visible {
 	background: var(--background-modifier-hover);
@@ -195,12 +227,13 @@
 .alternative-explorer-folder-row.is-drop-before::before,
 .alternative-explorer-folder-row.is-drop-after::after {
 	position: absolute;
-	left: 0;
-	right: 0;
+	left: 8px;
+	right: 8px;
 	height: 2px;
 	background: var(--interactive-accent);
 	content: "";
 	z-index: 1;
+	border-radius: 1px;
 }
 
 .alternative-explorer-folder-row.is-drop-before::before {
@@ -211,52 +244,61 @@
 	bottom: -1px;
 }
 
+.alternative-explorer-folder-toggle,
+.alternative-explorer-folder-toggle-spacer {
+	display: inline-flex;
+	flex: 0 0 22px;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin-left: 2px;
+}
+
+.alternative-explorer-folder-toggle {
+	padding: 0;
+	color: var(--text-muted);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.alternative-explorer-folder-toggle:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.alternative-explorer-folder-toggle svg {
+	width: 14px;
+	height: 14px;
+	transition: transform 120ms ease;
+}
+
+.alternative-explorer-folder-toggle.is-expanded svg {
+	transform: rotate(90deg);
+}
+
 .alternative-explorer-folder-button {
 	flex: 1 1 auto;
 	min-width: 0;
-	min-height: 39px;
-	padding: 6px 4px 6px 10px;
+	min-height: 34px;
+	padding: 4px 2px 4px 2px;
 	color: var(--text-normal);
 	text-align: left;
 	border-radius: 0;
 	cursor: pointer;
 }
 
-.alternative-explorer-folder-drill {
-	display: inline-flex;
-	flex: 0 0 28px;
-	align-items: center;
-	justify-content: center;
-	width: 28px;
-	height: 28px;
-	margin-right: 2px;
-	padding: 0;
-	color: var(--text-faint);
-	border-radius: var(--radius-s);
-	cursor: pointer;
-}
-
-.alternative-explorer-folder-drill:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover);
-}
-
-.alternative-explorer-folder-drill svg {
-	width: 14px;
-	height: 14px;
-}
-
 .alternative-explorer-row-icon {
 	display: inline-flex;
-	flex: 0 0 24px;
+	flex: 0 0 22px;
 	align-items: center;
 	justify-content: flex-start;
 	color: var(--text-muted);
 }
 
 .alternative-explorer-row-icon svg {
-	width: 16px;
-	height: 16px;
+	width: 15px;
+	height: 15px;
 }
 
 .alternative-explorer-folder-copy,
@@ -290,30 +332,41 @@
 	white-space: nowrap;
 }
 
+.alternative-explorer-folder-row .alternative-explorer-folder-meta {
+	display: none;
+}
+
+.alternative-explorer-folder-row:hover .alternative-explorer-folder-meta,
+.alternative-explorer-folder-row:focus-within .alternative-explorer-folder-meta,
+.alternative-explorer-folder-row.is-smart-row .alternative-explorer-folder-meta {
+	display: block;
+}
+
 .alternative-explorer-row-arrow {
 	display: inline-flex;
-	flex: 0 0 22px;
+	flex: 0 0 18px;
 	align-items: center;
 	justify-content: flex-end;
+	margin-right: 4px;
 	color: var(--text-faint);
 }
 
 .alternative-explorer-row-arrow svg {
-	width: 14px;
-	height: 14px;
+	width: 13px;
+	height: 13px;
 }
 
 .alternative-explorer-drag-handle {
 	display: inline-flex;
-	flex: 0 0 22px;
+	flex: 0 0 20px;
 	align-items: center;
 	justify-content: center;
-	width: 22px;
-	height: 22px;
+	width: 20px;
+	height: 20px;
 	margin-right: 4px;
 	color: var(--text-faint);
 	cursor: grab;
-	opacity: 0.35;
+	opacity: 0;
 }
 
 .alternative-explorer-drag-handle svg {
@@ -324,7 +377,7 @@
 .alternative-explorer-folder-row:hover .alternative-explorer-drag-handle,
 .alternative-explorer-folder-row:focus-within .alternative-explorer-drag-handle,
 .alternative-explorer-folder-row.is-dragging .alternative-explorer-drag-handle {
-	opacity: 1;
+	opacity: 0.7;
 }
 
 .alternative-explorer-file-row {
@@ -354,7 +407,6 @@
 	text-align: center;
 	flex-direction: column;
 	justify-content: center;
-	border-top: 1px solid var(--background-modifier-border);
 }
 
 .alternative-explorer-empty > span {
