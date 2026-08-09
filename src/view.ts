@@ -1,11 +1,28 @@
 import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
-import { VIEW_TYPE_ALTERNATIVE_EXPLORER } from "./constants";
+import {
+	NoteGroupBy,
+	NoteSortBy,
+	NoteSortDir,
+	VIEW_TYPE_ALTERNATIVE_EXPLORER,
+} from "./constants";
 import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
-import { groupNotesByRecency } from "./note-groups";
+import { buildNoteGroups } from "./note-groups";
 
 type FolderAction = "select" | "toggle" | "back-to-folders";
+
+const SORT_BY_LABELS: Record<NoteSortBy, string> = {
+	name: "Name",
+	mtime: "Modified",
+	ctime: "Created",
+};
+
+const GROUP_BY_LABELS: Record<NoteGroupBy, string> = {
+	none: "None",
+	mtime: "Modified",
+	ctime: "Created",
+};
 
 export class AlternativeExplorerView extends ItemView {
 	private draggedFolderPath: string | null = null;
@@ -78,6 +95,29 @@ export class AlternativeExplorerView extends ItemView {
 			if (recursiveControl) {
 				event.preventDefault();
 				void this.setRecursive(recursiveControl.dataset.recursive === "true");
+				return;
+			}
+
+			const sortMenuControl = element.closest<HTMLButtonElement>("button[data-open-sort-menu]");
+			if (sortMenuControl) {
+				event.preventDefault();
+				this.showSortMenu(event, sortMenuControl);
+				return;
+			}
+
+			const groupMenuControl = element.closest<HTMLButtonElement>("button[data-open-group-menu]");
+			if (groupMenuControl) {
+				event.preventDefault();
+				this.showGroupMenu(event, groupMenuControl);
+				return;
+			}
+
+			const groupPinnedControl = element.closest<HTMLButtonElement>(
+				"button[data-group-pinned]"
+			);
+			if (groupPinnedControl) {
+				event.preventDefault();
+				void this.setGroupPinned(groupPinnedControl.dataset.groupPinned === "true");
 				return;
 			}
 
@@ -281,9 +321,22 @@ export class AlternativeExplorerView extends ItemView {
 
 		const files = this.getNotesForScope();
 		const pinnedPaths = getBookmarkedFilePaths(this.app);
-		const groups = groupNotesByRecency(
-			files.map((file) => ({ file, path: file.path, mtime: file.stat.mtime })),
-			pinnedPaths
+		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
+		const groups = buildNoteGroups(
+			files.map((file) => ({
+				file,
+				path: file.path,
+				name: file.basename,
+				mtime: file.stat.mtime,
+				ctime: file.stat.ctime,
+			})),
+			{
+				sortBy,
+				sortDir,
+				groupBy,
+				groupPinned,
+				pinnedPaths,
+			}
 		);
 
 		if (groups.length === 0) {
@@ -307,19 +360,22 @@ export class AlternativeExplorerView extends ItemView {
 				cls: "alternative-explorer-section alternative-explorer-file-section",
 				attr: { "aria-label": group.label },
 			});
-			const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
-			const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-			label.createEl("h2", { text: group.label });
-			label.createSpan({
-				text: String(group.notes.length),
-				attr: {
-					"aria-label": `${group.notes.length} ${group.notes.length === 1 ? "note" : "notes"}`,
-				},
-			});
+			const showHeader = !(group.id === "all" && groups.length === 1);
+			if (showHeader) {
+				const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
+				const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
+				label.createEl("h2", { text: group.label });
+				label.createSpan({
+					text: String(group.notes.length),
+					attr: {
+						"aria-label": `${group.notes.length} ${group.notes.length === 1 ? "note" : "notes"}`,
+					},
+				});
+			}
 
 			const list = section.createDiv({ cls: "alternative-explorer-file-list" });
 			for (const entry of group.notes) {
-				this.renderNoteRow(list, entry.file);
+				this.renderNoteRow(list, entry.file, pinnedPaths.has(entry.path));
 			}
 		}
 	}
@@ -347,6 +403,53 @@ export class AlternativeExplorerView extends ItemView {
 		if (this.plugin.settings.notesScope !== "all") {
 			this.renderModeToggle(heading);
 		}
+
+		this.renderListControls(header);
+	}
+
+	private renderListControls(container: HTMLElement): void {
+		const controls = container.createDiv({
+			cls: "alternative-explorer-list-controls",
+			attr: { "aria-label": "Sort and group" },
+		});
+
+		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
+		const sortLabel = `${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "↑" : "↓"}`;
+		controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			text: sortLabel,
+			attr: {
+				type: "button",
+				"data-open-sort-menu": "true",
+				"aria-haspopup": "menu",
+				"aria-label": `Sort by ${SORT_BY_LABELS[sortBy]}, ${sortDir === "asc" ? "ascending" : "descending"}`,
+				title: "Sort",
+			},
+		});
+
+		controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			text: `Group: ${GROUP_BY_LABELS[groupBy]}`,
+			attr: {
+				type: "button",
+				"data-open-group-menu": "true",
+				"aria-haspopup": "menu",
+				"aria-label": `Group by ${GROUP_BY_LABELS[groupBy]}`,
+				title: "Group by",
+			},
+		});
+
+		controls.createEl("button", {
+			cls: `alternative-explorer-control-button${groupPinned ? " is-active" : ""}`,
+			text: "Pinned",
+			attr: {
+				type: "button",
+				"data-group-pinned": String(!groupPinned),
+				"aria-pressed": String(groupPinned),
+				"aria-label": groupPinned ? "Ungroup pinned notes" : "Group pinned notes",
+				title: groupPinned ? "Grouping pinned notes" : "Not grouping pinned notes",
+			},
+		});
 	}
 
 	private renderModeToggle(container: HTMLElement): void {
@@ -370,9 +473,9 @@ export class AlternativeExplorerView extends ItemView {
 		}
 	}
 
-	private renderNoteRow(list: HTMLElement, file: TFile): void {
+	private renderNoteRow(list: HTMLElement, file: TFile, pinned: boolean): void {
 		const row = list.createEl("button", {
-			cls: "alternative-explorer-file-row",
+			cls: `alternative-explorer-file-row${pinned ? " is-pinned" : ""}`,
 			attr: {
 				type: "button",
 				"data-file-path": file.path,
@@ -380,7 +483,7 @@ export class AlternativeExplorerView extends ItemView {
 			},
 		});
 		const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
-		setIcon(icon, "file-text");
+		setIcon(icon, pinned ? "pin" : "file-text");
 		const copy = row.createSpan({ cls: "alternative-explorer-file-copy" });
 		copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
 		const parent = file.parent;
@@ -398,12 +501,14 @@ export class AlternativeExplorerView extends ItemView {
 						: this.relativeParentPath(this.plugin.settings.notesScope, file),
 			});
 		}
+		const dateValue =
+			this.plugin.settings.sortBy === "ctime" ? file.stat.ctime : file.stat.mtime;
 		row.createEl("time", {
 			cls: "alternative-explorer-file-date",
-			text: moment(file.stat.mtime).format("MMM D"),
+			text: moment(dateValue).format("MMM D"),
 			attr: {
-				datetime: moment(file.stat.mtime).toISOString(),
-				title: moment(file.stat.mtime).format("YYYY-MM-DD HH:mm"),
+				datetime: moment(dateValue).toISOString(),
+				title: moment(dateValue).format("YYYY-MM-DD HH:mm"),
 			},
 		});
 	}
@@ -428,6 +533,84 @@ export class AlternativeExplorerView extends ItemView {
 		this.plugin.settings.recursive = recursive;
 		await this.plugin.saveSettings();
 		this.render();
+	}
+
+	private async setSort(sortBy: NoteSortBy, sortDir: NoteSortDir): Promise<void> {
+		if (
+			this.plugin.settings.sortBy === sortBy &&
+			this.plugin.settings.sortDir === sortDir
+		) {
+			return;
+		}
+		this.plugin.settings.sortBy = sortBy;
+		this.plugin.settings.sortDir = sortDir;
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async setGroupBy(groupBy: NoteGroupBy): Promise<void> {
+		if (this.plugin.settings.groupBy === groupBy) return;
+		this.plugin.settings.groupBy = groupBy;
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async setGroupPinned(groupPinned: boolean): Promise<void> {
+		if (this.plugin.settings.groupPinned === groupPinned) return;
+		this.plugin.settings.groupPinned = groupPinned;
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private showSortMenu(event: MouseEvent, anchor: HTMLElement): void {
+		const menu = new Menu();
+		for (const sortBy of ["name", "mtime", "ctime"] as const) {
+			menu.addItem((item) => {
+				item
+					.setTitle(SORT_BY_LABELS[sortBy])
+					.setChecked(this.plugin.settings.sortBy === sortBy)
+					.onClick(() => {
+						void this.setSort(sortBy, this.plugin.settings.sortDir);
+					});
+			});
+		}
+		menu.addSeparator();
+		menu.addItem((item) => {
+			item
+				.setTitle("Ascending")
+				.setChecked(this.plugin.settings.sortDir === "asc")
+				.onClick(() => {
+					void this.setSort(this.plugin.settings.sortBy, "asc");
+				});
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("Descending")
+				.setChecked(this.plugin.settings.sortDir === "desc")
+				.onClick(() => {
+					void this.setSort(this.plugin.settings.sortBy, "desc");
+				});
+		});
+		const rect = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+		event.stopPropagation();
+	}
+
+	private showGroupMenu(event: MouseEvent, anchor: HTMLElement): void {
+		const menu = new Menu();
+		for (const groupBy of ["none", "mtime", "ctime"] as const) {
+			menu.addItem((item) => {
+				item
+					.setTitle(GROUP_BY_LABELS[groupBy])
+					.setChecked(this.plugin.settings.groupBy === groupBy)
+					.onClick(() => {
+						void this.setGroupBy(groupBy);
+					});
+			});
+		}
+		const rect = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+		event.stopPropagation();
 	}
 
 	private async openAllNotes(): Promise<void> {
@@ -541,9 +724,7 @@ export class AlternativeExplorerView extends ItemView {
 			}
 		};
 		visit(folder);
-		return files.sort((left, right) =>
-			left.path.localeCompare(right.path, undefined, { sensitivity: "base" })
-		);
+		return files;
 	}
 
 	private notesTitle(): string {
