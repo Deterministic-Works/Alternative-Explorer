@@ -1,17 +1,20 @@
 # Alternative Explorer
 
-Alternative Explorer is an Obsidian plugin for browsing a vault in a calm, single-panel view. Folders are destinations and notes remain easy to scan. It coexists with Obsidian's built-in file explorer.
+Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Notes–style left sidebar. One pane switches between a folder list and a dated notes list. It coexists with Obsidian's built-in file explorer.
 
 ## Features
 
-- Browse direct subfolders and notes together in one panel, with breadcrumbs and Back for navigating up.
-- Switch the note list between direct-child and recursive results.
-- View each note as a compact row with its title and last-modified date.
+- Open in the left sidebar from the ribbon or **Alternative Explorer: Open explorer view**.
+- Browse folders in a single pane; tap a folder to switch into its notes list, or use the chevron to drill into subfolders.
+- Use **All notes** at the vault root to see every note (including notes that live in the root).
+- Scan notes grouped into Pinned (core Bookmarks), Today, Yesterday, Previous 7 Days, Previous 30 Days, and older months.
 - Drag sibling folder rows to save a custom order across sessions.
 
 ## Use
 
-Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in its own workspace tab. Selecting a note row opens that file in a new tab so the explorer remains available.
+Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in the left sidebar. Selecting a note opens it in the main editor.
+
+Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). If Bookmarks is disabled, the Pinned section simply stays empty.
 
 ## Development
 

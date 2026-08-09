@@ -43,9 +43,11 @@ Do not edit the generated `main.js` directly.
 |------|------|
 | `feature-plan.md` | Intended product features and interaction model (pre-implementation) |
 | `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
-| `src/view.ts` | Single-panel folder navigation, mode toggle, and note rows |
+| `src/view.ts` | Sidebar folders/notes pane switching and note rows |
+| `src/note-groups.ts` | Pure pinned/recency grouping for the notes list |
+| `src/bookmarks.ts` | Core Bookmarks plugin file-path reader |
 | `src/folder-order.ts` | Pure folder-order and path-remapping helpers |
-| `styles.css` | Single-panel layout and Obsidian-native presentation |
+| `styles.css` | Narrow sidebar layout and Obsidian-native presentation |
 | `manifest.json` | Plugin identity and Obsidian compatibility |
 | `package.json` | Development dependencies and verified commands |
 | `README.md` | User-facing behavior and local installation |
