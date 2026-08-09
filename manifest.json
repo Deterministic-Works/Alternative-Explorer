@@ -1,7 +1,7 @@
 {
 	"id": "alternative-explorer",
 	"name": "Alternative Explorer",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"minAppVersion": "1.5.0",
 	"description": "Browse folders and notes in a single-panel explorer with drill-down navigation.",
 	"author": "Deterministic Works",
