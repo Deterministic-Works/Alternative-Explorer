@@ -1,16 +1,16 @@
 # Alternative Explorer — feature plan
 
-Obsidian plugin: a calm, single-panel file explorer with drill-down folder navigation and a readable note list.
+Obsidian plugin: a calm, Apple Notes–style sidebar explorer with a single pane that switches between folders and notes.
 
-Source note: 2026-08-24.
+Source note: 2026-08-24; updated for sidebar pane-switch UX.
 
 ## Goals
 
-Replace (or sit beside) the default file explorer with a view that:
+Replace (or sit beside) the default file explorer with a left-sidebar view that:
 
-- Treats folders as navigable destinations, not only accordion rows
-- Keeps folders and notes in one continuous browser instead of splitting them into panes
-- Surfaces notes as compact, readable rows with light metadata
+- Treats folders as destinations that open a notes list (not accordion rows)
+- Switches the same pane between a folder list and a notes list (no stacked two-layer panel)
+- Groups notes by pinned/bookmarks and recency for easy scanning
 
 ## Features
 
@@ -19,39 +19,39 @@ Replace (or sit beside) the default file explorer with a view that:
 - Folders can be ordered manually (not only by name / modified time).
 - Order is changed by drag and drop and persisted across sessions.
 
-### 2. Drill-down folder navigation
+### 2. Single-pane folder ↔ notes switching
 
-- Clicking a folder opens that folder’s contents in the main list (like a traditional OS file browser).
-- This is the primary interaction — not in-place tree expansion like Obsidian’s default explorer.
+- The folders pane lists destinations only (never note rows).
+- At vault root, **All notes** appears first; vault folders follow.
+- Notes that live in the vault root appear only under **All notes**, not in the folders pane.
+- Tapping a folder opens that folder’s notes list in the same pane.
+- The chevron on a folder drills into its subfolder list (folders pane stays active).
+- Back from the notes pane returns to the folders pane.
 
-### 3. Single-panel folder list
+### 3. Readable, dated notes list
 
-- The current folder's direct subfolders appear first as destination rows.
-- Files follow in the same panel; there is no permanent folder tree or sidebar.
-- Back navigation and breadcrumbs expose the current location without duplicating the hierarchy.
+- Notes for a folder are that folder’s direct child files only.
+- **All notes** lists every vault file.
+- Sections (by modified time), empty ones omitted:
+  - **Pinned** — files bookmarked in Obsidian’s core Bookmarks plugin
+  - **Today**
+  - **Yesterday**
+  - **Previous 7 Days**
+  - **Previous 30 Days**
+  - Older months (`MMMM YYYY`)
+- Within a section, newest-first.
+- Selecting a note opens it in the main editor leaf.
 
-### 4. Shallow vs recursive file listing (toggle)
+### 4. Sidebar presentation
 
-When viewing a folder, a toggle chooses what files appear:
-
-| Mode | Files shown |
-|------|-------------|
-| Direct children | Files immediately under the current folder |
-| Recursive | All files under the current folder, including nested subfolders |
-
-### 5. Readable file list
-
-- Files render as compact, full-width rows that scan cleanly without wasting space.
-- Each row shows:
-  - **Title** (primary line)
-  - **Modified date** (secondary, less emphasized)
+- Opens in the left sidebar by default.
+- Layout is dense and narrow (sidebar chrome), not a centered document page.
 
 ## Interaction model (summary)
 
-1. Breadcrumbs and Back establish location.
-2. Folder rows drill into direct subfolders and can be dragged to reorder.
-3. The depth toggle switches the note list between direct and recursive results.
-4. Note rows show title and modified date and open the selected note.
+1. Folders pane: Back/breadcrumbs for nested folder navigation; All notes + folders at root.
+2. Folder body → notes pane for that folder; chevron → drill into subfolders.
+3. Notes pane: Back → folders; Pinned + recency sections; tap note → editor.
 
 ## Out of scope (for now)
 
@@ -61,4 +61,4 @@ The initial implementation leaves these for later:
 - Search
 - File operations (rename, move, delete, new note)
 - Replacing Obsidian’s built-in explorer (the initial view coexists with it)
-- Mobile-specific interactions beyond a responsive single-column layout
+- Mobile-specific interactions beyond responsive sidebar density

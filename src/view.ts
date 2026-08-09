@@ -1,9 +1,11 @@
 import { ItemView, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import { VIEW_TYPE_ALTERNATIVE_EXPLORER } from "./constants";
+import { getBookmarkedFilePaths } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
+import { groupNotesByRecency } from "./note-groups";
 
-type FolderAction = "navigate";
+type FolderAction = "drill" | "open-notes" | "back-to-folders";
 
 export class AlternativeExplorerView extends ItemView {
 	private draggedFolderPath: string | null = null;
@@ -35,14 +37,15 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	render(): void {
-		const currentFolder = this.resolveCurrentFolder();
 		const container = this.contentEl;
 		container.empty();
 
 		const browser = container.createEl("main", { cls: "alternative-explorer-browser" });
-		this.renderHeader(browser, currentFolder);
-		this.renderFolders(browser, currentFolder);
-		this.renderFiles(browser, currentFolder);
+		if (this.plugin.settings.pane === "notes") {
+			this.renderNotesPane(browser);
+		} else {
+			this.renderFoldersPane(browser);
+		}
 	}
 
 	private registerInteractions(): void {
@@ -51,18 +54,23 @@ export class AlternativeExplorerView extends ItemView {
 			const folderControl = element.closest<HTMLButtonElement>("button[data-folder-action]");
 			if (folderControl) {
 				event.preventDefault();
-				const path = folderControl.dataset.folderPath;
 				const action = folderControl.dataset.folderAction as FolderAction | undefined;
-				if (path && action) {
+				const path = folderControl.dataset.folderPath;
+				if (!action) return;
+				if (action === "back-to-folders") {
+					void this.backToFolders();
+					return;
+				}
+				if (path) {
 					void this.handleFolderAction(path, action);
 				}
 				return;
 			}
 
-			const modeControl = element.closest<HTMLButtonElement>("button[data-recursive]");
-			if (modeControl) {
+			const allNotesControl = element.closest<HTMLButtonElement>("button[data-open-all-notes]");
+			if (allNotesControl) {
 				event.preventDefault();
-				void this.setRecursive(modeControl.dataset.recursive === "true");
+				void this.openAllNotes();
 				return;
 			}
 
@@ -121,7 +129,37 @@ export class AlternativeExplorerView extends ItemView {
 		});
 	}
 
-	private renderHeader(container: HTMLElement, folder: TFolder): void {
+	private renderFoldersPane(container: HTMLElement): void {
+		const currentFolder = this.resolveCurrentFolder();
+		this.renderFoldersHeader(container, currentFolder);
+
+		const section = container.createEl("section", {
+			cls: "alternative-explorer-section alternative-explorer-folder-section",
+			attr: { "aria-label": "Folders" },
+		});
+
+		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
+
+		if (currentFolder.isRoot()) {
+			this.renderAllNotesRow(list);
+		}
+
+		const folders = this.getOrderedSubfolders(currentFolder);
+		if (folders.length === 0 && !currentFolder.isRoot()) {
+			const empty = section.createDiv({ cls: "alternative-explorer-empty" });
+			const icon = empty.createSpan();
+			setIcon(icon, "folder");
+			empty.createDiv({ text: "No folders here" });
+			empty.createEl("p", { text: "Use Back to return to the parent folder." });
+			return;
+		}
+
+		for (const child of folders) {
+			this.renderFolderRow(list, currentFolder, child);
+		}
+	}
+
+	private renderFoldersHeader(container: HTMLElement, folder: TFolder): void {
 		const header = container.createEl("header", { cls: "alternative-explorer-header" });
 		const navigation = header.createDiv({ cls: "alternative-explorer-navigation" });
 
@@ -130,7 +168,7 @@ export class AlternativeExplorerView extends ItemView {
 				cls: "alternative-explorer-back-button",
 				attr: {
 					type: "button",
-					"data-folder-action": "navigate",
+					"data-folder-action": "drill",
 					"data-folder-path": folder.parent.path,
 					"aria-label": `Back to ${this.folderName(folder.parent)}`,
 				},
@@ -141,120 +179,176 @@ export class AlternativeExplorerView extends ItemView {
 		this.renderBreadcrumbs(navigation, folder);
 
 		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
-		const titleGroup = heading.createDiv({ cls: "alternative-explorer-title-group" });
-		titleGroup.createEl("h1", { text: this.folderName(folder) });
-		this.renderModeToggle(heading);
+		heading.createEl("h1", { text: this.folderName(folder) });
 	}
 
-	private renderFolders(container: HTMLElement, folder: TFolder): void {
-		const folders = this.getOrderedSubfolders(folder);
-		if (folders.length === 0) return;
-
-		const section = container.createEl("section", {
-			cls: "alternative-explorer-section alternative-explorer-folder-section",
-			attr: { "aria-label": "Folders" },
+	private renderAllNotesRow(list: HTMLElement): void {
+		const row = list.createDiv({ cls: "alternative-explorer-folder-row is-smart-row" });
+		const button = row.createEl("button", {
+			cls: "alternative-explorer-folder-button",
+			attr: {
+				type: "button",
+				"data-open-all-notes": "true",
+				title: "All notes",
+			},
 		});
-		const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
-		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-		label.createEl("h2", { text: "Folders" });
-		label.createSpan({ text: String(folders.length), attr: { "aria-label": `${folders.length} folders` } });
-		sectionHeader.createDiv({
-			cls: "alternative-explorer-section-hint",
-			text: "Drag to reorder",
+		const icon = button.createSpan({ cls: "alternative-explorer-row-icon" });
+		setIcon(icon, "files");
+		const copy = button.createSpan({ cls: "alternative-explorer-folder-copy" });
+		copy.createSpan({ cls: "alternative-explorer-folder-name", text: "All notes" });
+		copy.createSpan({
+			cls: "alternative-explorer-folder-meta",
+			text: this.allNotesSummary(),
+		});
+		const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
+		setIcon(arrow, "chevron-right");
+	}
+
+	private renderFolderRow(list: HTMLElement, parent: TFolder, child: TFolder): void {
+		const hasSubfolders = child.children.some((entry) => entry instanceof TFolder);
+		const row = list.createDiv({
+			cls: "alternative-explorer-folder-row",
+			attr: {
+				draggable: "true",
+				"data-folder-path": child.path,
+				"data-parent-path": parent.path,
+			},
 		});
 
-		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
-		for (const child of folders) {
-			const row = list.createDiv({
-				cls: "alternative-explorer-folder-row",
-				attr: {
-					draggable: "true",
-					"data-folder-path": child.path,
-					"data-parent-path": folder.path,
-				},
-			});
-			const navigateButton = row.createEl("button", {
-				cls: "alternative-explorer-folder-button",
+		const openButton = row.createEl("button", {
+			cls: "alternative-explorer-folder-button",
+			attr: {
+				type: "button",
+				"data-folder-action": "open-notes",
+				"data-folder-path": child.path,
+				title: child.path,
+			},
+		});
+		const icon = openButton.createSpan({ cls: "alternative-explorer-row-icon" });
+		setIcon(icon, "folder");
+		const copy = openButton.createSpan({ cls: "alternative-explorer-folder-copy" });
+		copy.createSpan({ cls: "alternative-explorer-folder-name", text: child.name });
+		copy.createSpan({
+			cls: "alternative-explorer-folder-meta",
+			text: this.folderSummary(child),
+		});
+
+		if (hasSubfolders) {
+			const drillButton = row.createEl("button", {
+				cls: "alternative-explorer-folder-drill",
 				attr: {
 					type: "button",
-					"data-folder-action": "navigate",
+					"data-folder-action": "drill",
 					"data-folder-path": child.path,
-					title: child.path,
+					"aria-label": `Open folders in ${child.name}`,
+					title: `Open folders in ${child.name}`,
 				},
 			});
-			const icon = navigateButton.createSpan({ cls: "alternative-explorer-row-icon" });
-			setIcon(icon, "folder");
-			const copy = navigateButton.createSpan({ cls: "alternative-explorer-folder-copy" });
-			copy.createSpan({ cls: "alternative-explorer-folder-name", text: child.name });
-			copy.createSpan({ cls: "alternative-explorer-folder-meta", text: this.folderSummary(child) });
-			const arrow = navigateButton.createSpan({ cls: "alternative-explorer-row-arrow" });
-			setIcon(arrow, "chevron-right");
-			const dragHandle = row.createSpan({
-				cls: "alternative-explorer-drag-handle",
-				attr: { "aria-hidden": "true" },
-			});
-			setIcon(dragHandle, "grip-vertical");
+			setIcon(drillButton, "chevron-right");
 		}
+
+		const dragHandle = row.createSpan({
+			cls: "alternative-explorer-drag-handle",
+			attr: { "aria-hidden": "true" },
+		});
+		setIcon(dragHandle, "grip-vertical");
 	}
 
-	private renderFiles(container: HTMLElement, folder: TFolder): void {
-		const files = this.getFiles(folder, this.plugin.settings.recursive);
-		const section = container.createEl("section", {
-			cls: "alternative-explorer-section alternative-explorer-file-section",
-			attr: { "aria-label": "Notes" },
-		});
-		const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
-		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-		label.createEl("h2", { text: "Notes" });
-		label.createSpan({
-			text: String(files.length),
-			attr: { "aria-label": `${files.length} ${files.length === 1 ? "note" : "notes"}` },
-		});
+	private renderNotesPane(container: HTMLElement): void {
+		const title = this.notesTitle();
+		this.renderNotesHeader(container, title);
 
-		if (files.length === 0) {
-			const empty = section.createDiv({ cls: "alternative-explorer-empty" });
+		const files = this.getNotesForScope();
+		const pinnedPaths = getBookmarkedFilePaths(this.app);
+		const groups = groupNotesByRecency(
+			files.map((file) => ({ file, path: file.path, mtime: file.stat.mtime })),
+			pinnedPaths
+		);
+
+		if (groups.length === 0) {
+			const empty = container.createDiv({ cls: "alternative-explorer-empty" });
 			const icon = empty.createSpan();
 			setIcon(icon, "file-text");
 			empty.createDiv({ text: "No notes here yet" });
 			empty.createEl("p", {
-				text: this.plugin.settings.recursive
-					? "This folder and its subfolders are empty."
-					: "Switch to All below to include notes in subfolders.",
+				text:
+					this.plugin.settings.notesScope === "all"
+						? "Notes in the vault will appear here."
+						: "This folder has no notes yet.",
 			});
 			return;
 		}
 
-		const list = section.createDiv({ cls: "alternative-explorer-file-list" });
-		for (const file of files) {
-			const row = list.createEl("button", {
-				cls: "alternative-explorer-file-row",
+		for (const group of groups) {
+			const section = container.createEl("section", {
+				cls: "alternative-explorer-section alternative-explorer-file-section",
+				attr: { "aria-label": group.label },
+			});
+			const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
+			const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
+			label.createEl("h2", { text: group.label });
+			label.createSpan({
+				text: String(group.notes.length),
 				attr: {
-					type: "button",
-					"data-file-path": file.path,
-					title: file.path,
+					"aria-label": `${group.notes.length} ${group.notes.length === 1 ? "note" : "notes"}`,
 				},
 			});
-			const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
-			setIcon(icon, "file-text");
-			const copy = row.createSpan({ cls: "alternative-explorer-file-copy" });
-			copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
-			if (this.plugin.settings.recursive && file.parent?.path !== folder.path) {
-				copy.createSpan({
-					cls: "alternative-explorer-file-location",
-					text: this.relativeParentPath(folder, file),
-				});
+
+			const list = section.createDiv({ cls: "alternative-explorer-file-list" });
+			for (const entry of group.notes) {
+				this.renderNoteRow(list, entry.file);
 			}
-			row.createEl("time", {
-				cls: "alternative-explorer-file-date",
-				text: moment(file.stat.mtime).format("MMM D, YYYY"),
-				attr: {
-					datetime: moment(file.stat.mtime).toISOString(),
-					title: moment(file.stat.mtime).format("YYYY-MM-DD HH:mm"),
-				},
-			});
-			const arrow = row.createSpan({ cls: "alternative-explorer-row-arrow" });
-			setIcon(arrow, "arrow-up-right");
 		}
+	}
+
+	private renderNotesHeader(container: HTMLElement, title: string): void {
+		const header = container.createEl("header", { cls: "alternative-explorer-header" });
+		const navigation = header.createDiv({ cls: "alternative-explorer-navigation" });
+		const backButton = navigation.createEl("button", {
+			cls: "alternative-explorer-back-button",
+			attr: {
+				type: "button",
+				"data-folder-action": "back-to-folders",
+				"aria-label": "Back to folders",
+			},
+		});
+		setIcon(backButton, "arrow-left");
+		navigation.createSpan({
+			cls: "alternative-explorer-pane-label",
+			text: "Folders",
+		});
+
+		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
+		heading.createEl("h1", { text: title });
+	}
+
+	private renderNoteRow(list: HTMLElement, file: TFile): void {
+		const row = list.createEl("button", {
+			cls: "alternative-explorer-file-row",
+			attr: {
+				type: "button",
+				"data-file-path": file.path,
+				title: file.path,
+			},
+		});
+		const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
+		setIcon(icon, "file-text");
+		const copy = row.createSpan({ cls: "alternative-explorer-file-copy" });
+		copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
+		if (this.plugin.settings.notesScope === "all" && file.parent && !file.parent.isRoot()) {
+			copy.createSpan({
+				cls: "alternative-explorer-file-location",
+				text: file.parent.path,
+			});
+		}
+		row.createEl("time", {
+			cls: "alternative-explorer-file-date",
+			text: moment(file.stat.mtime).format("MMM D"),
+			attr: {
+				datetime: moment(file.stat.mtime).toISOString(),
+				title: moment(file.stat.mtime).format("YYYY-MM-DD HH:mm"),
+			},
+		});
 	}
 
 	private renderBreadcrumbs(container: HTMLElement, folder: TFolder): void {
@@ -271,14 +365,16 @@ export class AlternativeExplorerView extends ItemView {
 
 		lineage.forEach((ancestor, index) => {
 			if (index > 0) {
-				const separator = breadcrumbs.createSpan({ cls: "alternative-explorer-breadcrumb-separator" });
+				const separator = breadcrumbs.createSpan({
+					cls: "alternative-explorer-breadcrumb-separator",
+				});
 				setIcon(separator, "chevron-right");
 			}
 			breadcrumbs.createEl("button", {
 				text: this.folderName(ancestor),
 				attr: {
 					type: "button",
-					"data-folder-action": "navigate",
+					"data-folder-action": "drill",
 					"data-folder-path": ancestor.path,
 					"aria-current": ancestor.path === folder.path ? "page" : "false",
 				},
@@ -286,40 +382,31 @@ export class AlternativeExplorerView extends ItemView {
 		});
 	}
 
-	private renderModeToggle(container: HTMLElement): void {
-		const toggle = container.createDiv({
-			cls: "alternative-explorer-mode-toggle",
-			attr: { role: "group", "aria-label": "Notes to show" },
-		});
-		for (const [recursive, label] of [
-			[false, "This folder"],
-			[true, "All below"],
-		] as const) {
-			toggle.createEl("button", {
-				cls: recursive === this.plugin.settings.recursive ? "is-active" : "",
-				text: label,
-				attr: {
-					type: "button",
-					"data-recursive": String(recursive),
-					"aria-pressed": String(recursive === this.plugin.settings.recursive),
-				},
-			});
-		}
-	}
-
 	private async handleFolderAction(path: string, action: FolderAction): Promise<void> {
 		const folder = this.app.vault.getAbstractFileByPath(path);
 		if (!(folder instanceof TFolder)) return;
 
-		this.plugin.settings.currentFolder = folder.path;
+		if (action === "drill") {
+			this.plugin.settings.currentFolder = folder.path;
+			this.plugin.settings.pane = "folders";
+		} else if (action === "open-notes") {
+			this.plugin.settings.pane = "notes";
+			this.plugin.settings.notesScope = folder.path;
+		}
 
 		await this.plugin.saveSettings();
 		this.render();
 	}
 
-	private async setRecursive(recursive: boolean): Promise<void> {
-		if (this.plugin.settings.recursive === recursive) return;
-		this.plugin.settings.recursive = recursive;
+	private async openAllNotes(): Promise<void> {
+		this.plugin.settings.pane = "notes";
+		this.plugin.settings.notesScope = "all";
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async backToFolders(): Promise<void> {
+		this.plugin.settings.pane = "folders";
 		await this.plugin.saveSettings();
 		this.render();
 	}
@@ -349,7 +436,8 @@ export class AlternativeExplorerView extends ItemView {
 	private async openFile(path: string): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
-		await this.app.workspace.getLeaf("tab").openFile(file);
+		const leaf = this.app.workspace.getLeaf(false);
+		await leaf.openFile(file);
 	}
 
 	private resolveCurrentFolder(): TFolder {
@@ -374,21 +462,29 @@ export class AlternativeExplorerView extends ItemView {
 			.filter((child): child is TFolder => child !== undefined);
 	}
 
-	private getFiles(folder: TFolder, recursive: boolean): TFile[] {
-		const files: TFile[] = [];
-		const visit = (current: TFolder): void => {
-			for (const child of current.children) {
-				if (child instanceof TFile) {
-					files.push(child);
-				} else if (recursive && child instanceof TFolder) {
-					visit(child);
-				}
-			}
-		};
-		visit(folder);
-		return files.sort((left, right) =>
-			left.path.localeCompare(right.path, undefined, { sensitivity: "base" })
-		);
+	private getNotesForScope(): TFile[] {
+		const scope = this.plugin.settings.notesScope;
+		if (scope === "all") {
+			return this.app.vault.getFiles();
+		}
+
+		const folder = this.app.vault.getAbstractFileByPath(scope);
+		if (!(folder instanceof TFolder)) {
+			return [];
+		}
+
+		return folder.children.filter((child): child is TFile => child instanceof TFile);
+	}
+
+	private notesTitle(): string {
+		if (this.plugin.settings.notesScope === "all") {
+			return "All notes";
+		}
+		const folder = this.app.vault.getAbstractFileByPath(this.plugin.settings.notesScope);
+		if (folder instanceof TFolder) {
+			return this.folderName(folder);
+		}
+		return "Notes";
 	}
 
 	private folderName(folder: TFolder): string {
@@ -404,10 +500,9 @@ export class AlternativeExplorerView extends ItemView {
 		return parts.length > 0 ? parts.join(" · ") : "Empty folder";
 	}
 
-	private relativeParentPath(folder: TFolder, file: TFile): string {
-		const parentPath = file.parent?.path ?? "";
-		if (folder.isRoot()) return parentPath;
-		return parentPath.slice(folder.path.length + 1);
+	private allNotesSummary(): string {
+		const count = this.app.vault.getFiles().length;
+		return `${count} ${count === 1 ? "note" : "notes"}`;
 	}
 
 	private getValidDropTarget(target: EventTarget | null): HTMLElement | null {
@@ -418,7 +513,9 @@ export class AlternativeExplorerView extends ItemView {
 		if (row.dataset.folderPath === this.draggedFolderPath) return null;
 
 		const dragged = this.app.vault.getAbstractFileByPath(this.draggedFolderPath);
-		return dragged instanceof TFolder && dragged.parent?.path === row.dataset.parentPath ? row : null;
+		return dragged instanceof TFolder && dragged.parent?.path === row.dataset.parentPath
+			? row
+			: null;
 	}
 
 	private clearDropTargets(): void {

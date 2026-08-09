@@ -1,6 +1,7 @@
 import { Plugin, TFolder, WorkspaceLeaf } from "obsidian";
 import {
 	AlternativeExplorerSettings,
+	ExplorerPane,
 	VIEW_TYPE_ALTERNATIVE_EXPLORER,
 	createDefaultSettings,
 } from "./constants";
@@ -60,13 +61,15 @@ export default class AlternativeExplorerPlugin extends Plugin {
 	async loadSettings(): Promise<void> {
 		const rootPath = this.app.vault.getRoot().path;
 		const defaults = createDefaultSettings(rootPath);
-		const saved = await this.loadData() as Partial<AlternativeExplorerSettings> | null;
+		const saved = (await this.loadData()) as Partial<AlternativeExplorerSettings> | null;
 
 		this.settings = {
-			currentFolder: typeof saved?.currentFolder === "string"
-				? saved.currentFolder
-				: defaults.currentFolder,
-			recursive: typeof saved?.recursive === "boolean" ? saved.recursive : defaults.recursive,
+			currentFolder:
+				typeof saved?.currentFolder === "string"
+					? saved.currentFolder
+					: defaults.currentFolder,
+			pane: this.parsePane(saved?.pane),
+			notesScope: this.parseNotesScope(saved?.notesScope),
 			folderOrder: this.parseFolderOrder(saved?.folderOrder),
 		};
 		this.ensureCurrentFolderExists();
@@ -101,7 +104,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		if (existingLeaf) {
 			leaf = existingLeaf;
 		} else {
-			leaf = this.app.workspace.getLeaf("tab");
+			leaf = this.app.workspace.getLeftLeaf(false) ?? this.app.workspace.getLeaf(false);
 			await leaf.setViewState({ type: VIEW_TYPE_ALTERNATIVE_EXPLORER, active: true });
 		}
 
@@ -123,6 +126,9 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			oldPath,
 			newPath
 		);
+		if (this.settings.notesScope !== "all") {
+			this.settings.notesScope = replacePathPrefix(this.settings.notesScope, oldPath, newPath);
+		}
 		const remappedOrder = Object.create(null) as Record<string, string[]>;
 		for (const [parentPath, childPaths] of Object.entries(this.settings.folderOrder)) {
 			const remappedParent = replacePathPrefix(parentPath, oldPath, newPath);
@@ -132,6 +138,14 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		}
 		this.settings.folderOrder = remappedOrder;
 		await this.saveSettings();
+	}
+
+	private parsePane(value: unknown): ExplorerPane {
+		return value === "notes" ? "notes" : "folders";
+	}
+
+	private parseNotesScope(value: unknown): "all" | string {
+		return typeof value === "string" && value.length > 0 ? value : "all";
 	}
 
 	private parseFolderOrder(value: unknown): Record<string, string[]> {
