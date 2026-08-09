@@ -54,7 +54,7 @@ When viewing a folder’s notes, a toggle chooses depth:
 ### 5. Sidebar presentation
 
 - Opens in the left sidebar by default.
-- Folder rows are compact and indented by depth, with accent highlight for the active notes scope.
+- Folder rows are compact and indented by depth; the active notes scope uses stronger type weight only.
 - Layout is dense and narrow (sidebar chrome), not a centered document page.
 
 ## Interaction model (summary)
