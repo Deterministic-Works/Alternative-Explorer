@@ -24,8 +24,8 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "open-alternative-explorer",
-			name: "Open Alternative Explorer",
+			id: "open-explorer-view",
+			name: "Open explorer view",
 			callback: () => {
 				void this.activateView();
 			},
@@ -55,7 +55,6 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		if (this.refreshTimeout !== null) {
 			window.clearTimeout(this.refreshTimeout);
 		}
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_ALTERNATIVE_EXPLORER);
 	}
 
 	async loadSettings(): Promise<void> {

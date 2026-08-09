@@ -5,6 +5,6 @@
 	"minAppVersion": "1.5.0",
 	"description": "Browse folders with drill-down navigation, a folder-only tree, and readable file cards.",
 	"author": "Deterministic Works",
-	"authorUrl": "https://github.com/Deterministic-Works/Alternative-Explorer",
+	"authorUrl": "https://github.com/Deterministic-Works",
 	"isDesktopOnly": false
 }
