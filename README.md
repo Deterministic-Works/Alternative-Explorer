@@ -9,13 +9,14 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - On a folder’s notes list, toggle **This folder** vs **All below** to include or exclude notes in subfolders.
 - Use **All notes** to see every note (including notes that live in the vault root).
 - Scan notes grouped into Pinned (core Bookmarks), Today, Yesterday, Previous 7 Days, Previous 30 Days, and older months.
+- Right-click a note to **Pin** or **Unpin** it (toggles a core Bookmarks file bookmark).
 - Drag sibling folder rows to save a custom order across sessions.
 
 ## Use
 
 Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in the left sidebar. Selecting a note opens it in the main editor.
 
-Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). If Bookmarks is disabled, the Pinned section simply stays empty.
+Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). Right-click a note in the list to pin or unpin it. If Bookmarks is disabled, pin/unpin shows a notice and the Pinned section stays empty.
 
 ## Development
 

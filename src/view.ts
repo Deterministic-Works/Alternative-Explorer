@@ -1,7 +1,7 @@
-import { ItemView, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import { VIEW_TYPE_ALTERNATIVE_EXPLORER } from "./constants";
-import { getBookmarkedFilePaths } from "./bookmarks";
+import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
 import { groupNotesByRecency } from "./note-groups";
 
@@ -86,6 +86,17 @@ export class AlternativeExplorerView extends ItemView {
 				event.preventDefault();
 				void this.openFile(fileControl.dataset.filePath);
 			}
+		});
+
+		this.registerDomEvent(this.contentEl, "contextmenu", (event) => {
+			const fileControl = (event.target as HTMLElement).closest<HTMLButtonElement>(
+				"button[data-file-path]"
+			);
+			const path = fileControl?.dataset.filePath;
+			if (!path) return;
+
+			event.preventDefault();
+			this.showNoteContextMenu(event, path);
 		});
 
 		this.registerDomEvent(this.contentEl, "dragstart", (event) => {
@@ -459,6 +470,24 @@ export class AlternativeExplorerView extends ItemView {
 		if (!(file instanceof TFile)) return;
 		const leaf = this.app.workspace.getLeaf(false);
 		await leaf.openFile(file);
+	}
+
+	private showNoteContextMenu(event: MouseEvent, path: string): void {
+		const pinned = getBookmarkedFilePaths(this.app).has(path);
+		const menu = Menu.forEvent(event);
+		menu.addItem((item) => {
+			item
+				.setTitle(pinned ? "Unpin" : "Pin")
+				.setIcon(pinned ? "pin-off" : "pin")
+				.onClick(() => {
+					const result = toggleFileBookmark(this.app, path);
+					if (result === null) {
+						new Notice("Enable the core Bookmarks plugin to pin notes.");
+						return;
+					}
+					this.render();
+				});
+		});
 	}
 
 	private isExpanded(path: string): boolean {

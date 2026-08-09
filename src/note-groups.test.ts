@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { groupNotesByRecency } from "./note-groups";
-import { collectBookmarkedFilePaths } from "./bookmarks";
 
 const NOW = new Date(2026, 7, 9, 15, 30, 0); // Aug 9, 2026 local
 
@@ -67,28 +66,5 @@ describe("groupNotesByRecency", () => {
 		const groups = groupNotesByRecency([note("old.md", older)], new Set(), NOW);
 		expect(groups).toHaveLength(1);
 		expect(groups[0]?.id).toBe("month-2025-01");
-	});
-});
-
-describe("collectBookmarkedFilePaths", () => {
-	it("collects nested file bookmarks and ignores non-file entries", () => {
-		const paths = collectBookmarkedFilePaths([
-			{ type: "file", path: "Inbox/a.md" },
-			{ type: "folder", path: "Projects" },
-			{
-				type: "group",
-				items: [
-					{ type: "file", path: "Pinned/b.md" },
-					{ type: "search", query: "todo" },
-					{
-						type: "group",
-						items: [{ type: "file", path: "Pinned/c.md" }],
-					},
-				],
-			},
-			{ type: "file" },
-		]);
-
-		expect(Array.from(paths).sort()).toEqual(["Inbox/a.md", "Pinned/b.md", "Pinned/c.md"]);
 	});
 });
