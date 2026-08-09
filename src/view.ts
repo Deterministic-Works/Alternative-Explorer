@@ -414,42 +414,44 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
-		const sortLabel = `${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "↑" : "↓"}`;
-		controls.createEl("button", {
+		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
+		const sortButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
-			text: sortLabel,
 			attr: {
 				type: "button",
 				"data-open-sort-menu": "true",
 				"aria-haspopup": "menu",
-				"aria-label": `Sort by ${SORT_BY_LABELS[sortBy]}, ${sortDir === "asc" ? "ascending" : "descending"}`,
-				title: "Sort",
+				"aria-label": sortTitle,
+				title: sortTitle,
 			},
 		});
+		setIcon(sortButton, sortDir === "asc" ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow");
 
-		controls.createEl("button", {
+		const groupTitle = `Group: ${GROUP_BY_LABELS[groupBy]}`;
+		const groupButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
-			text: `Group: ${GROUP_BY_LABELS[groupBy]}`,
 			attr: {
 				type: "button",
 				"data-open-group-menu": "true",
 				"aria-haspopup": "menu",
-				"aria-label": `Group by ${GROUP_BY_LABELS[groupBy]}`,
-				title: "Group by",
+				"aria-label": groupTitle,
+				title: groupTitle,
 			},
 		});
+		setIcon(groupButton, groupBy === "none" ? "list" : "layers");
 
-		controls.createEl("button", {
+		const pinnedTitle = groupPinned ? "Grouping pinned notes" : "Not grouping pinned notes";
+		const pinnedButton = controls.createEl("button", {
 			cls: `alternative-explorer-control-button${groupPinned ? " is-active" : ""}`,
-			text: "Pinned",
 			attr: {
 				type: "button",
 				"data-group-pinned": String(!groupPinned),
 				"aria-pressed": String(groupPinned),
 				"aria-label": groupPinned ? "Ungroup pinned notes" : "Group pinned notes",
-				title: groupPinned ? "Grouping pinned notes" : "Not grouping pinned notes",
+				title: pinnedTitle,
 			},
 		});
+		setIcon(pinnedButton, "pin");
 	}
 
 	private renderModeToggle(container: HTMLElement): void {
