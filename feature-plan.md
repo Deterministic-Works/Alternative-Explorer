@@ -29,7 +29,7 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 
 ### 3. Note depth toggle
 
-When viewing a folder’s notes, a toggle chooses depth:
+When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 | Mode | Files shown |
 |------|-------------|
@@ -37,6 +37,7 @@ When viewing a folder’s notes, a toggle chooses depth:
 | All below | All files under the selected folder, including nested subfolders |
 
 - **All notes** still lists every vault file (toggle hidden).
+- Sort / group / pinned controls sit right-aligned on the same header row.
 
 ### 4. Readable, configurable notes list
 
@@ -59,7 +60,7 @@ When viewing a folder’s notes, a toggle chooses depth:
 
 1. Folders pane: All notes + expandable vault tree; drag to reorder siblings.
 2. Chevron → expand/collapse; folder body → notes pane for that folder.
-3. Notes pane: Back → folders; This folder / All below toggle; Sort / Group / Pinned controls; tap note → editor; right-click note → Pin/Unpin.
+3. Notes pane: Back → folders; icon depth toggle (This folder / All below); right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
 
 ## Out of scope (for now)
 

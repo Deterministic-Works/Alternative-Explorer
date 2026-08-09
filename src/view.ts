@@ -401,10 +401,10 @@ export class AlternativeExplorerView extends ItemView {
 		const titleGroup = heading.createDiv({ cls: "alternative-explorer-title-group" });
 		titleGroup.createEl("h1", { text: title });
 		if (this.plugin.settings.notesScope !== "all") {
-			this.renderModeToggle(heading);
+			this.renderModeToggle(titleGroup);
 		}
 
-		this.renderListControls(header);
+		this.renderListControls(heading);
 	}
 
 	private renderListControls(container: HTMLElement): void {
@@ -455,24 +455,21 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private renderModeToggle(container: HTMLElement): void {
-		const toggle = container.createDiv({
-			cls: "alternative-explorer-mode-toggle",
-			attr: { role: "group", "aria-label": "Notes to show" },
+		const recursive = this.plugin.settings.recursive;
+		const title = recursive
+			? "All below — showing notes in this folder and subfolders"
+			: "This folder — showing notes directly in this folder";
+		const button = container.createEl("button", {
+			cls: `alternative-explorer-depth-toggle${recursive ? " is-active" : ""}`,
+			attr: {
+				type: "button",
+				"data-recursive": String(!recursive),
+				"aria-pressed": String(recursive),
+				"aria-label": recursive ? "Show this folder only" : "Show all notes below",
+				title,
+			},
 		});
-		for (const [recursive, label] of [
-			[false, "This folder"],
-			[true, "All below"],
-		] as const) {
-			toggle.createEl("button", {
-				cls: recursive === this.plugin.settings.recursive ? "is-active" : "",
-				text: label,
-				attr: {
-					type: "button",
-					"data-recursive": String(recursive),
-					"aria-pressed": String(recursive === this.plugin.settings.recursive),
-				},
-			});
-		}
+		setIcon(button, recursive ? "folder-tree" : "folder");
 	}
 
 	private renderNoteRow(list: HTMLElement, file: TFile, pinned: boolean): void {
