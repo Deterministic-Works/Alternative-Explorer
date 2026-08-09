@@ -442,7 +442,7 @@ export class AlternativeExplorerView extends ItemView {
 
 		const pinnedTitle = groupPinned ? "Grouping pinned notes" : "Not grouping pinned notes";
 		const pinnedButton = controls.createEl("button", {
-			cls: `alternative-explorer-control-button${groupPinned ? " is-active" : ""}`,
+			cls: `alternative-explorer-control-button alternative-explorer-pin-toggle${groupPinned ? " is-active" : ""}`,
 			attr: {
 				type: "button",
 				"data-group-pinned": String(!groupPinned),
