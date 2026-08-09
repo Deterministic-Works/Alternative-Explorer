@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	mergeFolderOrder,
-	moveFolderBefore,
-	moveFolderBy,
+	moveFolderRelative,
 	replacePathPrefix,
 } from "./folder-order";
 
@@ -23,13 +22,17 @@ describe("mergeFolderOrder", () => {
 });
 
 describe("manual moves", () => {
-	it("moves a folder one position", () => {
-		expect(moveFolderBy(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
-		expect(moveFolderBy(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
-	});
-
-	it("moves a dragged folder before its drop target", () => {
-		expect(moveFolderBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
+	it("moves a dragged folder before or after its drop target", () => {
+		expect(moveFolderRelative(["a", "b", "c"], "c", "a", "before")).toEqual([
+			"c",
+			"a",
+			"b",
+		]);
+		expect(moveFolderRelative(["a", "b", "c"], "a", "c", "after")).toEqual([
+			"b",
+			"c",
+			"a",
+		]);
 	});
 });
 

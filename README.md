@@ -1,18 +1,17 @@
 # Alternative Explorer
 
-Alternative Explorer is an Obsidian plugin for browsing a vault with folders as destinations and files as readable cards. It coexists with Obsidian's built-in file explorer.
+Alternative Explorer is an Obsidian plugin for browsing a vault in a calm, single-panel view. Folders are destinations and notes remain easy to scan. It coexists with Obsidian's built-in file explorer.
 
 ## Features
 
-- Click a folder to drill into it, with breadcrumbs for navigating back up.
-- Expand a folder in the tree to reveal subfolders only. Files never appear in the tree.
-- Switch the content pane between direct-child and recursive file listings.
-- View each file as a card with its title and last-modified date.
-- Drag sibling folders, or use their up/down controls, to save a custom order across sessions.
+- Browse direct subfolders and notes together in one panel, with breadcrumbs and Back for navigating up.
+- Switch the note list between direct-child and recursive results.
+- View each note as a compact row with its title and last-modified date.
+- Drag sibling folder rows to save a custom order across sessions.
 
 ## Use
 
-Enable the plugin, then select the folder-tree ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in its own workspace tab. Selecting a file card opens that file in a new tab so the explorer remains available.
+Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in its own workspace tab. Selecting a note row opens that file in a new tab so the explorer remains available.
 
 ## Development
 

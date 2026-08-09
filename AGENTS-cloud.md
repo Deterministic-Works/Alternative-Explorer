@@ -43,9 +43,9 @@ Do not edit the generated `main.js` directly.
 |------|------|
 | `feature-plan.md` | Intended product features and interaction model (pre-implementation) |
 | `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
-| `src/view.ts` | Folder tree, drill-down navigation, mode toggle, and file cards |
+| `src/view.ts` | Single-panel folder navigation, mode toggle, and note rows |
 | `src/folder-order.ts` | Pure folder-order and path-remapping helpers |
-| `styles.css` | Two-pane layout and Obsidian-native presentation |
+| `styles.css` | Single-panel layout and Obsidian-native presentation |
 | `manifest.json` | Plugin identity and Obsidian compatibility |
 | `package.json` | Development dependencies and verified commands |
 | `README.md` | User-facing behavior and local installation |

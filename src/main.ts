@@ -67,9 +67,6 @@ export default class AlternativeExplorerPlugin extends Plugin {
 				? saved.currentFolder
 				: defaults.currentFolder,
 			recursive: typeof saved?.recursive === "boolean" ? saved.recursive : defaults.recursive,
-			expandedFolders: Array.isArray(saved?.expandedFolders)
-				? saved.expandedFolders.filter((path): path is string => typeof path === "string")
-				: defaults.expandedFolders,
 			folderOrder: this.parseFolderOrder(saved?.folderOrder),
 		};
 		this.ensureCurrentFolderExists();
@@ -126,14 +123,6 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			oldPath,
 			newPath
 		);
-		this.settings.expandedFolders = Array.from(
-			new Set(
-				this.settings.expandedFolders.map((path) =>
-					replacePathPrefix(path, oldPath, newPath)
-				)
-			)
-		);
-
 		const remappedOrder = Object.create(null) as Record<string, string[]>;
 		for (const [parentPath, childPaths] of Object.entries(this.settings.folderOrder)) {
 			const remappedParent = replacePathPrefix(parentPath, oldPath, newPath);

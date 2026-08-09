@@ -1,9 +1,9 @@
 import { ItemView, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import { VIEW_TYPE_ALTERNATIVE_EXPLORER } from "./constants";
-import { mergeFolderOrder, moveFolderBefore, moveFolderBy } from "./folder-order";
+import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
 
-type FolderAction = "expand" | "move-down" | "move-up" | "navigate";
+type FolderAction = "navigate";
 
 export class AlternativeExplorerView extends ItemView {
 	private draggedFolderPath: string | null = null;
@@ -39,9 +39,10 @@ export class AlternativeExplorerView extends ItemView {
 		const container = this.contentEl;
 		container.empty();
 
-		const layout = container.createDiv({ cls: "alternative-explorer-layout" });
-		this.renderTree(layout, currentFolder);
-		this.renderContent(layout, currentFolder);
+		const browser = container.createEl("main", { cls: "alternative-explorer-browser" });
+		this.renderHeader(browser, currentFolder);
+		this.renderFolders(browser, currentFolder);
+		this.renderFiles(browser, currentFolder);
 	}
 
 	private registerInteractions(): void {
@@ -74,10 +75,10 @@ export class AlternativeExplorerView extends ItemView {
 
 		this.registerDomEvent(this.contentEl, "dragstart", (event) => {
 			const row = (event.target as HTMLElement).closest<HTMLElement>(
-				".alternative-explorer-tree-row[data-folder-path]"
+				".alternative-explorer-folder-row[data-folder-path]"
 			);
 			const path = row?.dataset.folderPath;
-			if (!row || !path || row.dataset.root === "true") {
+			if (!row || !path) {
 				event.preventDefault();
 				return;
 			}
@@ -98,7 +99,11 @@ export class AlternativeExplorerView extends ItemView {
 				event.dataTransfer.dropEffect = "move";
 			}
 			this.clearDropTargets();
-			row.addClass("is-drop-target");
+			row.addClass(
+				event.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2
+					? "is-drop-before"
+					: "is-drop-after"
+			);
 		});
 
 		this.registerDomEvent(this.contentEl, "drop", (event) => {
@@ -106,7 +111,8 @@ export class AlternativeExplorerView extends ItemView {
 			const targetPath = row?.dataset.folderPath;
 			if (!targetPath || !this.draggedFolderPath) return;
 			event.preventDefault();
-			void this.moveFolderBeforeTarget(this.draggedFolderPath, targetPath);
+			const position = row.hasClass("is-drop-after") ? "after" : "before";
+			void this.moveFolderRelativeToTarget(this.draggedFolderPath, targetPath, position);
 			this.finishDrag();
 		});
 
@@ -115,163 +121,139 @@ export class AlternativeExplorerView extends ItemView {
 		});
 	}
 
-	private renderTree(layout: HTMLElement, currentFolder: TFolder): void {
-		const pane = layout.createEl("nav", {
-			cls: "alternative-explorer-tree-pane",
-			attr: { "aria-label": "Folder tree" },
-		});
-		const heading = pane.createDiv({ cls: "alternative-explorer-pane-heading" });
-		heading.createEl("h2", { text: "Folders" });
-		heading.createEl("span", { text: "Drag or use arrows to reorder" });
+	private renderHeader(container: HTMLElement, folder: TFolder): void {
+		const header = container.createEl("header", { cls: "alternative-explorer-header" });
+		const navigation = header.createDiv({ cls: "alternative-explorer-navigation" });
 
-		const tree = pane.createEl("ul", {
-			cls: "alternative-explorer-tree",
-			attr: { role: "tree" },
-		});
-		this.renderFolderNode(tree, this.app.vault.getRoot(), currentFolder, true);
+		if (folder.parent) {
+			const backButton = navigation.createEl("button", {
+				cls: "alternative-explorer-back-button",
+				attr: {
+					type: "button",
+					"data-folder-action": "navigate",
+					"data-folder-path": folder.parent.path,
+					"aria-label": `Back to ${this.folderName(folder.parent)}`,
+				},
+			});
+			setIcon(backButton, "arrow-left");
+		}
+
+		this.renderBreadcrumbs(navigation, folder);
+
+		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
+		const titleGroup = heading.createDiv({ cls: "alternative-explorer-title-group" });
+		titleGroup.createEl("h1", { text: this.folderName(folder) });
+		this.renderModeToggle(heading);
 	}
 
-	private renderFolderNode(
-		parent: HTMLElement,
-		folder: TFolder,
-		currentFolder: TFolder,
-		isRoot = false
-	): void {
-		const subfolders = this.getOrderedSubfolders(folder);
-		const isExpanded = this.plugin.settings.expandedFolders.includes(folder.path);
-		const item = parent.createEl("li", {
-			cls: "alternative-explorer-tree-item",
-			attr: {
-				role: "treeitem",
-				"aria-expanded": subfolders.length > 0 ? String(isExpanded) : "false",
-			},
+	private renderFolders(container: HTMLElement, folder: TFolder): void {
+		const folders = this.getOrderedSubfolders(folder);
+		if (folders.length === 0) return;
+
+		const section = container.createEl("section", {
+			cls: "alternative-explorer-section alternative-explorer-folder-section",
+			attr: { "aria-label": "Folders" },
 		});
-		const row = item.createDiv({
-			cls: `alternative-explorer-tree-row${
-				folder.path === currentFolder.path ? " is-current" : ""
-			}`,
-			attr: {
-				draggable: String(!isRoot),
-				"data-folder-path": folder.path,
-				"data-parent-path": folder.parent?.path ?? "",
-				"data-root": String(isRoot),
-			},
+		const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
+		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
+		label.createEl("h2", { text: "Folders" });
+		label.createSpan({ text: String(folders.length), attr: { "aria-label": `${folders.length} folders` } });
+		sectionHeader.createDiv({
+			cls: "alternative-explorer-section-hint",
+			text: "Drag to reorder",
 		});
 
-		const expandButton = row.createEl("button", {
-			cls: "alternative-explorer-icon-button alternative-explorer-expand",
-			attr: {
-				type: "button",
-				"data-folder-action": "expand",
-				"data-folder-path": folder.path,
-				"aria-label": `${isExpanded ? "Collapse" : "Expand"} ${this.folderName(folder)}`,
-			},
-		});
-		expandButton.disabled = subfolders.length === 0;
-		if (subfolders.length > 0) {
-			setIcon(expandButton, isExpanded ? "chevron-down" : "chevron-right");
-		}
-
-		const navigateButton = row.createEl("button", {
-			cls: "alternative-explorer-folder-button",
-			text: this.folderName(folder),
-			attr: {
-				type: "button",
-				"data-folder-action": "navigate",
-				"data-folder-path": folder.path,
-				title: isRoot ? "Vault root" : folder.path,
-			},
-		});
-		if (folder.path === currentFolder.path) {
-			navigateButton.setAttribute("aria-current", "page");
-		}
-
-		if (!isRoot) {
-			const siblings = this.getOrderedSubfolders(folder.parent ?? this.app.vault.getRoot());
-			const siblingIndex = siblings.findIndex((sibling) => sibling.path === folder.path);
-			const orderControls = row.createDiv({ cls: "alternative-explorer-order-controls" });
-			this.createOrderButton(orderControls, folder, "move-up", "chevron-up", siblingIndex === 0);
-			this.createOrderButton(
-				orderControls,
-				folder,
-				"move-down",
-				"chevron-down",
-				siblingIndex === siblings.length - 1
-			);
-		}
-
-		if (!isExpanded || subfolders.length === 0) return;
-
-		const children = item.createEl("ul", { attr: { role: "group" } });
-		for (const subfolder of subfolders) {
-			this.renderFolderNode(children, subfolder, currentFolder);
+		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
+		for (const child of folders) {
+			const row = list.createDiv({
+				cls: "alternative-explorer-folder-row",
+				attr: {
+					draggable: "true",
+					"data-folder-path": child.path,
+					"data-parent-path": folder.path,
+				},
+			});
+			const navigateButton = row.createEl("button", {
+				cls: "alternative-explorer-folder-button",
+				attr: {
+					type: "button",
+					"data-folder-action": "navigate",
+					"data-folder-path": child.path,
+					title: child.path,
+				},
+			});
+			const icon = navigateButton.createSpan({ cls: "alternative-explorer-row-icon" });
+			setIcon(icon, "folder");
+			const copy = navigateButton.createSpan({ cls: "alternative-explorer-folder-copy" });
+			copy.createSpan({ cls: "alternative-explorer-folder-name", text: child.name });
+			copy.createSpan({ cls: "alternative-explorer-folder-meta", text: this.folderSummary(child) });
+			const arrow = navigateButton.createSpan({ cls: "alternative-explorer-row-arrow" });
+			setIcon(arrow, "chevron-right");
+			const dragHandle = row.createSpan({
+				cls: "alternative-explorer-drag-handle",
+				attr: { "aria-hidden": "true" },
+			});
+			setIcon(dragHandle, "grip-vertical");
 		}
 	}
 
-	private createOrderButton(
-		container: HTMLElement,
-		folder: TFolder,
-		action: "move-up" | "move-down",
-		icon: string,
-		disabled: boolean
-	): void {
-		const direction = action === "move-up" ? "up" : "down";
-		const button = container.createEl("button", {
-			cls: "alternative-explorer-icon-button",
-			attr: {
-				type: "button",
-				"data-folder-action": action,
-				"data-folder-path": folder.path,
-				"aria-label": `Move ${this.folderName(folder)} ${direction}`,
-			},
-		});
-		button.disabled = disabled;
-		setIcon(button, icon);
-	}
-
-	private renderContent(layout: HTMLElement, folder: TFolder): void {
-		const pane = layout.createEl("section", {
-			cls: "alternative-explorer-content-pane",
-			attr: { "aria-label": "Files" },
-		});
-		this.renderBreadcrumbs(pane, folder);
-
-		const toolbar = pane.createDiv({ cls: "alternative-explorer-toolbar" });
-		const titleGroup = toolbar.createDiv({ cls: "alternative-explorer-title-group" });
-		titleGroup.createEl("h2", { text: this.folderName(folder) });
-
+	private renderFiles(container: HTMLElement, folder: TFolder): void {
 		const files = this.getFiles(folder, this.plugin.settings.recursive);
-		titleGroup.createEl("span", {
-			text: `${files.length} ${files.length === 1 ? "file" : "files"}`,
+		const section = container.createEl("section", {
+			cls: "alternative-explorer-section alternative-explorer-file-section",
+			attr: { "aria-label": "Notes" },
 		});
-		this.renderModeToggle(toolbar);
+		const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
+		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
+		label.createEl("h2", { text: "Notes" });
+		label.createSpan({
+			text: String(files.length),
+			attr: { "aria-label": `${files.length} ${files.length === 1 ? "note" : "notes"}` },
+		});
 
 		if (files.length === 0) {
-			pane.createDiv({
-				cls: "alternative-explorer-empty",
+			const empty = section.createDiv({ cls: "alternative-explorer-empty" });
+			const icon = empty.createSpan();
+			setIcon(icon, "file-text");
+			empty.createDiv({ text: "No notes here yet" });
+			empty.createEl("p", {
 				text: this.plugin.settings.recursive
-					? "No files in this folder or its subfolders."
-					: "No files directly in this folder.",
+					? "This folder and its subfolders are empty."
+					: "Switch to All below to include notes in subfolders.",
 			});
 			return;
 		}
 
-		const grid = pane.createDiv({ cls: "alternative-explorer-file-grid" });
+		const list = section.createDiv({ cls: "alternative-explorer-file-list" });
 		for (const file of files) {
-			const card = grid.createEl("button", {
-				cls: "alternative-explorer-file-card",
+			const row = list.createEl("button", {
+				cls: "alternative-explorer-file-row",
 				attr: {
 					type: "button",
 					"data-file-path": file.path,
 					title: file.path,
 				},
 			});
-			card.createDiv({ cls: "alternative-explorer-file-title", text: file.basename });
-			card.createEl("time", {
+			const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
+			setIcon(icon, "file-text");
+			const copy = row.createSpan({ cls: "alternative-explorer-file-copy" });
+			copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
+			if (this.plugin.settings.recursive && file.parent?.path !== folder.path) {
+				copy.createSpan({
+					cls: "alternative-explorer-file-location",
+					text: this.relativeParentPath(folder, file),
+				});
+			}
+			row.createEl("time", {
 				cls: "alternative-explorer-file-date",
-				text: moment(file.stat.mtime).format("YYYY-MM-DD HH:mm"),
-				attr: { datetime: moment(file.stat.mtime).toISOString() },
+				text: moment(file.stat.mtime).format("MMM D, YYYY"),
+				attr: {
+					datetime: moment(file.stat.mtime).toISOString(),
+					title: moment(file.stat.mtime).format("YYYY-MM-DD HH:mm"),
+				},
 			});
+			const arrow = row.createSpan({ cls: "alternative-explorer-row-arrow" });
+			setIcon(arrow, "arrow-up-right");
 		}
 	}
 
@@ -289,7 +271,8 @@ export class AlternativeExplorerView extends ItemView {
 
 		lineage.forEach((ancestor, index) => {
 			if (index > 0) {
-				breadcrumbs.createSpan({ cls: "alternative-explorer-breadcrumb-separator", text: "/" });
+				const separator = breadcrumbs.createSpan({ cls: "alternative-explorer-breadcrumb-separator" });
+				setIcon(separator, "chevron-right");
 			}
 			breadcrumbs.createEl("button", {
 				text: this.folderName(ancestor),
@@ -306,11 +289,11 @@ export class AlternativeExplorerView extends ItemView {
 	private renderModeToggle(container: HTMLElement): void {
 		const toggle = container.createDiv({
 			cls: "alternative-explorer-mode-toggle",
-			attr: { role: "group", "aria-label": "File listing depth" },
+			attr: { role: "group", "aria-label": "Notes to show" },
 		});
 		for (const [recursive, label] of [
-			[false, "Direct"],
-			[true, "Recursive"],
+			[false, "This folder"],
+			[true, "All below"],
 		] as const) {
 			toggle.createEl("button", {
 				cls: recursive === this.plugin.settings.recursive ? "is-active" : "",
@@ -328,21 +311,7 @@ export class AlternativeExplorerView extends ItemView {
 		const folder = this.app.vault.getAbstractFileByPath(path);
 		if (!(folder instanceof TFolder)) return;
 
-		if (action === "navigate") {
-			this.plugin.settings.currentFolder = folder.path;
-			this.expandLineage(folder);
-		} else if (action === "expand") {
-			const expanded = new Set(this.plugin.settings.expandedFolders);
-			if (expanded.has(folder.path)) {
-				expanded.delete(folder.path);
-			} else {
-				expanded.add(folder.path);
-			}
-			this.plugin.settings.expandedFolders = Array.from(expanded);
-		} else {
-			await this.moveFolder(folder, action === "move-up" ? -1 : 1);
-			return;
-		}
+		this.plugin.settings.currentFolder = folder.path;
 
 		await this.plugin.saveSettings();
 		this.render();
@@ -355,15 +324,11 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private async moveFolder(folder: TFolder, delta: -1 | 1): Promise<void> {
-		const parent = folder.parent ?? this.app.vault.getRoot();
-		const order = this.getOrderedSubfolders(parent).map((sibling) => sibling.path);
-		this.plugin.settings.folderOrder[parent.path] = moveFolderBy(order, folder.path, delta);
-		await this.plugin.saveSettings();
-		this.plugin.refreshViews();
-	}
-
-	private async moveFolderBeforeTarget(folderPath: string, targetPath: string): Promise<void> {
+	private async moveFolderRelativeToTarget(
+		folderPath: string,
+		targetPath: string,
+		position: "after" | "before"
+	): Promise<void> {
 		const folder = this.app.vault.getAbstractFileByPath(folderPath);
 		const target = this.app.vault.getAbstractFileByPath(targetPath);
 		if (!(folder instanceof TFolder) || !(target instanceof TFolder)) return;
@@ -371,10 +336,11 @@ export class AlternativeExplorerView extends ItemView {
 
 		const parent = folder.parent ?? this.app.vault.getRoot();
 		const order = this.getOrderedSubfolders(parent).map((sibling) => sibling.path);
-		this.plugin.settings.folderOrder[parent.path] = moveFolderBefore(
+		this.plugin.settings.folderOrder[parent.path] = moveFolderRelative(
 			order,
 			folder.path,
-			target.path
+			target.path,
+			position
 		);
 		await this.plugin.saveSettings();
 		this.plugin.refreshViews();
@@ -395,16 +361,6 @@ export class AlternativeExplorerView extends ItemView {
 		const root = this.app.vault.getRoot();
 		this.plugin.settings.currentFolder = root.path;
 		return root;
-	}
-
-	private expandLineage(folder: TFolder): void {
-		const expanded = new Set(this.plugin.settings.expandedFolders);
-		let cursor: TFolder | null = folder;
-		while (cursor) {
-			expanded.add(cursor.path);
-			cursor = cursor.parent;
-		}
-		this.plugin.settings.expandedFolders = Array.from(expanded);
 	}
 
 	private getOrderedSubfolders(folder: TFolder): TFolder[] {
@@ -439,11 +395,27 @@ export class AlternativeExplorerView extends ItemView {
 		return folder.isRoot() ? "Vault" : folder.name;
 	}
 
+	private folderSummary(folder: TFolder): string {
+		const folders = folder.children.filter((child) => child instanceof TFolder).length;
+		const files = folder.children.filter((child) => child instanceof TFile).length;
+		const parts: string[] = [];
+		if (folders > 0) parts.push(`${folders} ${folders === 1 ? "folder" : "folders"}`);
+		if (files > 0) parts.push(`${files} ${files === 1 ? "note" : "notes"}`);
+		return parts.length > 0 ? parts.join(" · ") : "Empty folder";
+	}
+
+	private relativeParentPath(folder: TFolder, file: TFile): string {
+		const parentPath = file.parent?.path ?? "";
+		if (folder.isRoot()) return parentPath;
+		return parentPath.slice(folder.path.length + 1);
+	}
+
 	private getValidDropTarget(target: EventTarget | null): HTMLElement | null {
 		const row = (target as HTMLElement | null)?.closest<HTMLElement>(
-			".alternative-explorer-tree-row[data-folder-path]"
+			".alternative-explorer-folder-row[data-folder-path]"
 		);
-		if (!row || !this.draggedFolderPath || row.dataset.root === "true") return null;
+		if (!row || !this.draggedFolderPath) return null;
+		if (row.dataset.folderPath === this.draggedFolderPath) return null;
 
 		const dragged = this.app.vault.getAbstractFileByPath(this.draggedFolderPath);
 		return dragged instanceof TFolder && dragged.parent?.path === row.dataset.parentPath ? row : null;
@@ -451,8 +423,11 @@ export class AlternativeExplorerView extends ItemView {
 
 	private clearDropTargets(): void {
 		this.contentEl
-			.querySelectorAll(".is-drop-target")
-			.forEach((element) => element.removeClass("is-drop-target"));
+			.querySelectorAll(".is-drop-before, .is-drop-after")
+			.forEach((element) => {
+				element.removeClass("is-drop-before");
+				element.removeClass("is-drop-after");
+			});
 	}
 
 	private finishDrag(): void {
