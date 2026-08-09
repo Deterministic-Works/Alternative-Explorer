@@ -1,0 +1,17 @@
+node_modules/
+main.js
+main.js.map
+.DS_Store
+*.log
+
+# Local agent configuration and internal workflow files
+AGENTS.md
+CLAUDE.md
+.agents/
+.codex/
+.cursor/
+docs/task-handoff.md
+docs/cross-agent-workflow.md
+docs/internal/
+.internal/
+ROADMAP.md
