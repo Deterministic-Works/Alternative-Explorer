@@ -2,6 +2,9 @@ import { Plugin, TFolder, WorkspaceLeaf } from "obsidian";
 import {
 	AlternativeExplorerSettings,
 	ExplorerPane,
+	NoteGroupBy,
+	NoteSortBy,
+	NoteSortDir,
 	VIEW_TYPE_ALTERNATIVE_EXPLORER,
 	createDefaultSettings,
 } from "./constants";
@@ -77,6 +80,11 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			recursive: typeof saved?.recursive === "boolean" ? saved.recursive : defaults.recursive,
 			expandedFolders: this.parseExpandedFolders(saved?.expandedFolders),
 			folderOrder: this.parseFolderOrder(saved?.folderOrder),
+			sortBy: this.parseSortBy(saved?.sortBy),
+			sortDir: this.parseSortDir(saved?.sortDir),
+			groupBy: this.parseGroupBy(saved?.groupBy),
+			groupPinned:
+				typeof saved?.groupPinned === "boolean" ? saved.groupPinned : defaults.groupPinned,
 		};
 		this.ensureCurrentFolderExists();
 		this.pruneExpandedFolders();
@@ -168,6 +176,18 @@ export default class AlternativeExplorerPlugin extends Plugin {
 
 	private parseNotesScope(value: unknown): "all" | string {
 		return typeof value === "string" && value.length > 0 ? value : "all";
+	}
+
+	private parseSortBy(value: unknown): NoteSortBy {
+		return value === "name" || value === "mtime" || value === "ctime" ? value : "mtime";
+	}
+
+	private parseSortDir(value: unknown): NoteSortDir {
+		return value === "asc" || value === "desc" ? value : "desc";
+	}
+
+	private parseGroupBy(value: unknown): NoteGroupBy {
+		return value === "none" || value === "mtime" || value === "ctime" ? value : "mtime";
 	}
 
 	private parseFolderOrder(value: unknown): Record<string, string[]> {

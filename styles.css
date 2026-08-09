@@ -118,6 +118,34 @@
 	font-weight: var(--font-semibold);
 }
 
+.alternative-explorer-list-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 4px;
+	margin-top: 6px;
+}
+
+.alternative-explorer-control-button {
+	min-height: 22px;
+	padding: 2px 6px;
+	color: var(--nav-item-color, var(--text-muted));
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+
+.alternative-explorer-control-button:hover {
+	color: var(--nav-item-color-hover, var(--text-normal));
+	background-color: var(--nav-item-background-hover, var(--background-modifier-hover));
+}
+
+.alternative-explorer-control-button.is-active {
+	color: var(--nav-item-color-active, var(--text-normal));
+	font-weight: var(--font-semibold);
+}
+
 .alternative-explorer-section {
 	padding-top: 6px;
 }

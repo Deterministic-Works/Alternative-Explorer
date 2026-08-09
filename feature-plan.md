@@ -10,7 +10,7 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 
 - Shows folders as an expandable tree in one pane (not drill-down into a child-only list)
 - Lets any folder (including nested ones) open that folder’s notes in the same pane
-- Groups notes by pinned/bookmarks and recency for easy scanning
+- Groups notes with configurable sort/group controls and optional pinned bookmarks
 
 ## Features
 
@@ -38,16 +38,13 @@ When viewing a folder’s notes, a toggle chooses depth:
 
 - **All notes** still lists every vault file (toggle hidden).
 
-### 4. Readable, dated notes list
+### 4. Readable, configurable notes list
 
-- Sections (by modified time), empty ones omitted:
-  - **Pinned** — files bookmarked in Obsidian’s core Bookmarks plugin
-  - **Today**
-  - **Yesterday**
-  - **Previous 7 Days**
-  - **Previous 30 Days**
-  - Older months (`MMMM YYYY`)
-- Within a section, newest-first.
+- Sort controls in the notes pane: **Name**, **Modified**, or **Created**, each ascending or descending.
+- Group-by controls: **None**, **Modified**, or **Created**.
+  - Modified/Created use recency sections: Today, Yesterday, Previous 7 Days, Previous 30 Days, older months (`MMMM YYYY`).
+  - Empty sections are omitted.
+- Separate **Pinned** toggle: when on, bookmarked notes appear in a **Pinned** section first; when off, they stay in normal groups (still marked with a pin icon).
 - Nested note location is shown when listing recursively or under **All notes**.
 - Selecting a note opens it in the main editor leaf.
 - Right-click a note to **Pin** / **Unpin** (toggles a core Bookmarks file bookmark; requires Bookmarks enabled).
@@ -62,13 +59,12 @@ When viewing a folder’s notes, a toggle chooses depth:
 
 1. Folders pane: All notes + expandable vault tree; drag to reorder siblings.
 2. Chevron → expand/collapse; folder body → notes pane for that folder.
-3. Notes pane: Back → folders; This folder / All below toggle; Pinned + recency sections; tap note → editor; right-click note → Pin/Unpin.
+3. Notes pane: Back → folders; This folder / All below toggle; Sort / Group / Pinned controls; tap note → editor; right-click note → Pin/Unpin.
 
 ## Out of scope (for now)
 
 The initial implementation leaves these for later:
 
-- User-configurable sorting / filtering of the note list
 - Search
 - File operations (rename, move, delete, new note)
 - Replacing Obsidian’s built-in explorer (the initial view coexists with it)

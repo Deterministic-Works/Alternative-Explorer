@@ -1,12 +1,25 @@
+import type { NoteGroupBy, NoteSortBy, NoteSortDir } from "./constants";
+
 export interface NoteLike {
 	path: string;
+	name: string;
 	mtime: number;
+	ctime: number;
 }
 
 export interface NoteGroup<T extends NoteLike = NoteLike> {
 	id: string;
 	label: string;
 	notes: T[];
+}
+
+export interface BuildNoteGroupsOptions {
+	sortBy: NoteSortBy;
+	sortDir: NoteSortDir;
+	groupBy: NoteGroupBy;
+	groupPinned: boolean;
+	pinnedPaths: ReadonlySet<string>;
+	now?: Date;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,35 +38,67 @@ function monthLabel(date: Date): string {
 	return date.toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
-function compareNewestFirst<T extends NoteLike>(left: T, right: T): number {
-	return right.mtime - left.mtime || left.path.localeCompare(right.path, undefined, {
-		sensitivity: "base",
-	});
+function timestampFor(note: NoteLike, field: "mtime" | "ctime"): number {
+	return field === "ctime" ? note.ctime : note.mtime;
 }
 
-/**
- * Groups notes into Apple Notes–style recency buckets.
- * Pinned notes (by path) appear first and are excluded from date buckets.
- */
-export function groupNotesByRecency<T extends NoteLike>(
+export function compareNotes(
+	left: NoteLike,
+	right: NoteLike,
+	sortBy: NoteSortBy,
+	sortDir: NoteSortDir
+): number {
+	const direction = sortDir === "asc" ? 1 : -1;
+	let result = 0;
+
+	if (sortBy === "name") {
+		result = left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+	} else {
+		result = timestampFor(left, sortBy) - timestampFor(right, sortBy);
+	}
+
+	if (result === 0) {
+		result = left.path.localeCompare(right.path, undefined, { sensitivity: "base" });
+		return result;
+	}
+
+	return result * direction;
+}
+
+function sortNotes<T extends NoteLike>(
+	notes: T[],
+	sortBy: NoteSortBy,
+	sortDir: NoteSortDir
+): T[] {
+	return [...notes].sort((left, right) => compareNotes(left, right, sortBy, sortDir));
+}
+
+function partitionPinned<T extends NoteLike>(
 	notes: readonly T[],
 	pinnedPaths: ReadonlySet<string>,
-	now: Date = new Date()
-): NoteGroup<T>[] {
-	const pinned: T[] = [];
-	const unpinned: T[] = [];
+	groupPinned: boolean
+): { pinned: T[]; rest: T[] } {
+	if (!groupPinned) {
+		return { pinned: [], rest: [...notes] };
+	}
 
+	const pinned: T[] = [];
+	const rest: T[] = [];
 	for (const note of notes) {
 		if (pinnedPaths.has(note.path)) {
 			pinned.push(note);
 		} else {
-			unpinned.push(note);
+			rest.push(note);
 		}
 	}
+	return { pinned, rest };
+}
 
-	pinned.sort(compareNewestFirst);
-	unpinned.sort(compareNewestFirst);
-
+function groupByRecency<T extends NoteLike>(
+	notes: readonly T[],
+	field: "mtime" | "ctime",
+	now: Date
+): NoteGroup<T>[] {
 	const todayStart = startOfLocalDay(now);
 	const yesterdayStart = new Date(todayStart.getTime() - DAY_MS);
 	const previous7Start = new Date(todayStart.getTime() - 7 * DAY_MS);
@@ -65,38 +110,35 @@ export function groupNotesByRecency<T extends NoteLike>(
 	const previous30: T[] = [];
 	const months = new Map<string, { label: string; notes: T[] }>();
 
-	for (const note of unpinned) {
-		const modified = new Date(note.mtime);
-		if (modified >= todayStart) {
+	for (const note of notes) {
+		const stamped = new Date(timestampFor(note, field));
+		if (stamped >= todayStart) {
 			today.push(note);
 			continue;
 		}
-		if (modified >= yesterdayStart) {
+		if (stamped >= yesterdayStart) {
 			yesterday.push(note);
 			continue;
 		}
-		if (modified >= previous7Start) {
+		if (stamped >= previous7Start) {
 			previous7.push(note);
 			continue;
 		}
-		if (modified >= previous30Start) {
+		if (stamped >= previous30Start) {
 			previous30.push(note);
 			continue;
 		}
 
-		const key = monthKey(modified);
+		const key = monthKey(stamped);
 		const existing = months.get(key);
 		if (existing) {
 			existing.notes.push(note);
 		} else {
-			months.set(key, { label: monthLabel(modified), notes: [note] });
+			months.set(key, { label: monthLabel(stamped), notes: [note] });
 		}
 	}
 
 	const groups: NoteGroup<T>[] = [];
-	if (pinned.length > 0) {
-		groups.push({ id: "pinned", label: "Pinned", notes: pinned });
-	}
 	if (today.length > 0) {
 		groups.push({ id: "today", label: "Today", notes: today });
 	}
@@ -118,4 +160,69 @@ export function groupNotesByRecency<T extends NoteLike>(
 	}
 
 	return groups;
+}
+
+/**
+ * Builds note sections from sort, group-by, and optional pinned partitioning.
+ */
+export function buildNoteGroups<T extends NoteLike>(
+	notes: readonly T[],
+	options: BuildNoteGroupsOptions
+): NoteGroup<T>[] {
+	const now = options.now ?? new Date();
+	const { pinned, rest } = partitionPinned(notes, options.pinnedPaths, options.groupPinned);
+	const groups: NoteGroup<T>[] = [];
+
+	if (pinned.length > 0) {
+		groups.push({
+			id: "pinned",
+			label: "Pinned",
+			notes: sortNotes(pinned, options.sortBy, options.sortDir),
+		});
+	}
+
+	if (options.groupBy === "none") {
+		if (rest.length > 0) {
+			groups.push({
+				id: "all",
+				label: "Notes",
+				notes: sortNotes(rest, options.sortBy, options.sortDir),
+			});
+		}
+		return groups;
+	}
+
+	for (const group of groupByRecency(rest, options.groupBy, now)) {
+		groups.push({
+			...group,
+			notes: sortNotes(group.notes, options.sortBy, options.sortDir),
+		});
+	}
+
+	return groups;
+}
+
+/**
+ * @deprecated Prefer buildNoteGroups. Kept for older call sites/tests during transition.
+ */
+export function groupNotesByRecency<T extends { path: string; mtime: number }>(
+	notes: readonly T[],
+	pinnedPaths: ReadonlySet<string>,
+	now: Date = new Date()
+): NoteGroup<T & NoteLike>[] {
+	return buildNoteGroups(
+		notes.map((note) => ({
+			...note,
+			name: note.path.split("/").pop() ?? note.path,
+			ctime: note.mtime,
+		})),
+		{
+			sortBy: "mtime",
+			sortDir: "desc",
+			groupBy: "mtime",
+			groupPinned: true,
+			pinnedPaths,
+			now,
+		}
+	) as NoteGroup<T & NoteLike>[];
 }
