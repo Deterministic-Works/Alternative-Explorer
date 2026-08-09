@@ -27,20 +27,29 @@ Do not invent durable product facts in agent notes when they belong in tracked c
 
 ## Commands
 
-No build or test command is established yet. The repository currently holds planning material only; plugin source, package manifests, and scripts have not been added.
+```bash
+npm install       # install development dependencies
+npm test          # run focused unit tests
+npm run build     # type-check and produce the ignored main.js bundle
+npm run dev       # rebuild main.js in watch mode
+git diff --check  # check patch whitespace
+```
 
-When a Node/Obsidian plugin scaffold lands, document verified commands here from evidence.
-
-Documentation-only changes: run `git diff --check`.
+Do not edit the generated `main.js` directly.
 
 ## Repository map
 
 | Path | Role |
 |------|------|
 | `feature-plan.md` | Intended product features and interaction model (pre-implementation) |
+| `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
+| `src/view.ts` | Folder tree, drill-down navigation, mode toggle, and file cards |
+| `src/folder-order.ts` | Pure folder-order and path-remapping helpers |
+| `styles.css` | Two-pane layout and Obsidian-native presentation |
+| `manifest.json` | Plugin identity and Obsidian compatibility |
+| `package.json` | Development dependencies and verified commands |
+| `README.md` | User-facing behavior and local installation |
 | `.gitignore` | Ignores build output and local-only agent/workflow files |
-
-Plugin source, manifests, and build tooling are not present yet. Expand this map when the scaffold lands.
 
 ## Engineering guardrails
 

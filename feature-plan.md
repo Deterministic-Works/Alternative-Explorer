@@ -58,10 +58,10 @@ expand → subfolders  click folder → drill in
 
 ## Out of scope (for now)
 
-Not specified in the source note; leave undecided until later:
+The initial implementation leaves these for later:
 
-- Sorting / filtering of the file card list
+- User-configurable sorting / filtering of the file card list
 - Search
 - File operations (rename, move, delete, new note)
-- Replacing vs coexisting with Obsidian’s built-in explorer
-- Mobile-specific layout
+- Replacing Obsidian’s built-in explorer (the initial view coexists with it)
+- Mobile-specific interactions beyond a responsive stacked layout
