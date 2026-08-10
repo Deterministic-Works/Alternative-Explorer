@@ -50,6 +50,7 @@ Do not edit the generated `main.js` directly.
 | `src/folder-sections.ts` | Pure folder-section partition, sort, and membership helpers |
 | `src/smart-folders.ts` | Pure smart-folder rule matching helpers |
 | `src/smart-folder-modal.ts` | Create/edit UI for smart folders |
+| `src/confirm-modal.ts` | Confirm dialog for destructive actions |
 | `styles.css` | Narrow sidebar layout and Obsidian-native presentation |
 | `manifest.json` | Plugin identity and Obsidian compatibility |
 | `package.json` | Development dependencies and verified commands |

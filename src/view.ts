@@ -27,6 +27,7 @@ import {
 } from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
 import { SectionNameModal } from "./section-name-modal";
+import { ConfirmModal } from "./confirm-modal";
 import { SmartFolderModal } from "./smart-folder-modal";
 import { noteMatchesSmartFolder, type SmartFolderNoteSnapshot } from "./smart-folders";
 
@@ -1113,9 +1114,22 @@ export class AlternativeExplorerView extends ItemView {
 				.setTitle("Delete section")
 				.setIcon("trash")
 				.onClick(() => {
-					void this.deleteFolderSection(sectionId);
+					this.confirmDeleteFolderSection(sectionId, section.name);
 				});
 		});
+	}
+
+	private confirmDeleteFolderSection(sectionId: string, name: string): void {
+		new ConfirmModal(
+			this.app,
+			"Delete section",
+			`Delete section “${name}”? Folders in it stay in the vault and move back to the unassigned list.`,
+			"Delete",
+			(confirmed) => {
+				if (!confirmed) return;
+				void this.deleteFolderSection(sectionId);
+			}
+		).open();
 	}
 
 	private async assignFolderToSection(
@@ -1268,9 +1282,22 @@ export class AlternativeExplorerView extends ItemView {
 				.setTitle("Delete smart folder")
 				.setIcon("trash")
 				.onClick(() => {
-					void this.deleteSmartFolder(id);
+					this.confirmDeleteSmartFolder(id, smartFolder.name);
 				});
 		});
+	}
+
+	private confirmDeleteSmartFolder(id: string, name: string): void {
+		new ConfirmModal(
+			this.app,
+			"Delete smart folder",
+			`Delete smart folder “${name}”? This cannot be undone.`,
+			"Delete",
+			(confirmed) => {
+				if (!confirmed) return;
+				void this.deleteSmartFolder(id);
+			}
+		).open();
 	}
 
 	private async revealCurrentNote(): Promise<void> {
