@@ -275,6 +275,27 @@ describe("noteMatchesRule", () => {
 				now
 			)
 		).toBe(true);
+		expect(
+			noteMatchesRule(
+				eightDaysAgo,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-14-days" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				eightDaysAgo,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "14" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				lastMonthNote,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-14-days" }),
+				now
+			)
+		).toBe(false);
 	});
 });
 

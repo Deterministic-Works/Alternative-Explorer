@@ -363,12 +363,6 @@ export function resolveDateBound(rawValue: string, now: Date = new Date()): Date
 	if (normalized === "yesterday") {
 		return { start: todayStart - DAY_MS, end: todayStart };
 	}
-	if (normalized === "last-7-days" || normalized === "previous-7-days") {
-		return { start: tomorrowStart - 7 * DAY_MS, end: tomorrowStart };
-	}
-	if (normalized === "last-30-days" || normalized === "previous-30-days") {
-		return { start: tomorrowStart - 30 * DAY_MS, end: tomorrowStart };
-	}
 	if (normalized === "this-week") {
 		const weekStart = startOfWeek(todayStart);
 		return { start: weekStart, end: weekStart + 7 * DAY_MS };
@@ -385,6 +379,11 @@ export function resolveDateBound(rawValue: string, now: Date = new Date()): Date
 		const monthStart = startOfMonth(todayStart);
 		const previousMonthStart = addMonths(monthStart, -1);
 		return { start: previousMonthStart, end: monthStart };
+	}
+
+	const lastDays = parseLastDaysCount(normalized);
+	if (lastDays !== null) {
+		return { start: tomorrowStart - lastDays * DAY_MS, end: tomorrowStart };
 	}
 
 	const daysAgo = /^(\d+)-days?-ago$/.exec(normalized);
@@ -410,6 +409,31 @@ export function resolveDateBound(rawValue: string, now: Date = new Date()): Date
 	if (!Number.isFinite(parsed)) return null;
 	const start = startOfLocalDay(parsed);
 	return { start, end: start + DAY_MS };
+}
+
+/** Returns N for values like last-14-days, previous-14-days, 14-days, or 14. */
+export function parseLastDaysCount(rawValue: string): number | null {
+	const normalized = rawValue.trim().toLowerCase().replace(/_/g, "-").replace(/\s+/g, "-");
+	if (!normalized) return null;
+
+	const patterns = [
+		/^last-(\d+)-days?$/,
+		/^previous-(\d+)-days?$/,
+		/^(\d+)-days?$/,
+		/^(\d+)$/,
+	];
+	for (const pattern of patterns) {
+		const match = pattern.exec(normalized);
+		if (!match) continue;
+		const days = Number(match[1]);
+		if (!Number.isInteger(days) || days <= 0) return null;
+		return days;
+	}
+	return null;
+}
+
+export function formatLastDaysValue(days: number): string {
+	return `last-${days}-days`;
 }
 
 function startOfLocalDay(timestamp: number): number {

@@ -13,6 +13,8 @@ import {
 	RELATIVE_DATE_RANGE_VALUES,
 	createSmartFolder,
 	createSmartFolderRule,
+	formatLastDaysValue,
+	parseLastDaysCount,
 } from "./smart-folders";
 
 const FIELD_OPTIONS: { value: string; label: string }[] = [
@@ -112,7 +114,16 @@ export class SmartFolderModal extends Modal {
 			this.rules.push(createSmartFolderRule());
 		}
 		for (const rule of this.rules) {
-			if (isDateField(rule.field) && /^\d{4}-\d{2}-\d{2}$/.test(rule.value)) {
+			if (!isDateField(rule.field) || !rule.value) continue;
+			const presets =
+				rule.operator === "within"
+					? (RELATIVE_DATE_RANGE_VALUES as readonly string[])
+					: (RELATIVE_DATE_DAY_VALUES as readonly string[]);
+			if (presets.includes(rule.value)) continue;
+			if (
+				/^\d{4}-\d{2}-\d{2}$/.test(rule.value) ||
+				(rule.operator === "within" && parseLastDaysCount(rule.value) !== null)
+			) {
 				this.customDateRuleIds.add(rule.id);
 			}
 		}
@@ -300,14 +311,17 @@ export class SmartFolderModal extends Modal {
 					dropdown.addOption(value, RELATIVE_DATE_DAY_LABELS[value]);
 				}
 			}
-			dropdown.addOption(CUSTOM_DATE_VALUE, "Custom date…");
+			dropdown.addOption(
+				CUSTOM_DATE_VALUE,
+				rule.operator === "within" ? "Custom days…" : "Custom date…"
+			);
 			dropdown.setValue(usingCustom ? CUSTOM_DATE_VALUE : rule.value);
 			dropdown.onChange((value) => {
 				if (value === CUSTOM_DATE_VALUE) {
 					this.customDateRuleIds.add(rule.id);
 					this.focusCustomDateRuleId = rule.id;
 					if (presets.includes(rule.value)) {
-						rule.value = "";
+						rule.value = rule.operator === "within" ? formatLastDaysValue(14) : "";
 					}
 				} else {
 					this.customDateRuleIds.delete(rule.id);
@@ -319,28 +333,64 @@ export class SmartFolderModal extends Modal {
 		});
 
 		if (usingCustom) {
-			setting.addText((text) => {
-				text
-					.setPlaceholder("YYYY-MM-DD")
-					.setValue(/^\d{4}-\d{2}-\d{2}$/.test(rule.value) ? rule.value : "")
-					.onChange((value) => {
-						rule.value = value.trim();
+			if (rule.operator === "within") {
+				const days = parseLastDaysCount(rule.value) ?? 14;
+				if (parseLastDaysCount(rule.value) === null) {
+					rule.value = formatLastDaysValue(days);
+				}
+				setting.addText((text) => {
+					text.setPlaceholder("Days").setValue(String(days)).onChange((value) => {
+						const parsed = Number.parseInt(value.trim(), 10);
+						if (Number.isInteger(parsed) && parsed > 0) {
+							rule.value = formatLastDaysValue(parsed);
+						} else {
+							rule.value = value.trim();
+						}
 					});
-				text.inputEl.addClass("alternative-explorer-smart-custom-date");
-				text.inputEl.addEventListener("keydown", (event) => {
-					if (event.key === "Enter") {
-						event.preventDefault();
-						this.submit();
+					text.inputEl.type = "number";
+					text.inputEl.min = "1";
+					text.inputEl.step = "1";
+					text.inputEl.addClass("alternative-explorer-smart-custom-days");
+					text.inputEl.setAttribute("aria-label", "Last N days");
+					text.inputEl.title = "Last N days";
+					text.inputEl.addEventListener("keydown", (event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							this.submit();
+						}
+					});
+					if (this.focusCustomDateRuleId === rule.id) {
+						this.focusCustomDateRuleId = null;
+						window.setTimeout(() => {
+							text.inputEl.focus();
+							text.inputEl.select();
+						}, 0);
 					}
 				});
-				if (this.focusCustomDateRuleId === rule.id) {
-					this.focusCustomDateRuleId = null;
-					window.setTimeout(() => {
-						text.inputEl.focus();
-						text.inputEl.select();
-					}, 0);
-				}
-			});
+			} else {
+				setting.addText((text) => {
+					text
+						.setPlaceholder("YYYY-MM-DD")
+						.setValue(/^\d{4}-\d{2}-\d{2}$/.test(rule.value) ? rule.value : "")
+						.onChange((value) => {
+							rule.value = value.trim();
+						});
+					text.inputEl.addClass("alternative-explorer-smart-custom-date");
+					text.inputEl.addEventListener("keydown", (event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							this.submit();
+						}
+					});
+					if (this.focusCustomDateRuleId === rule.id) {
+						this.focusCustomDateRuleId = null;
+						window.setTimeout(() => {
+							text.inputEl.focus();
+							text.inputEl.select();
+						}, 0);
+					}
+				});
+			}
 		}
 	}
 
@@ -348,8 +398,11 @@ export class SmartFolderModal extends Modal {
 		const normalizedRules = this.rules.map((rule) => {
 			let value = rule.value.trim();
 			if (isDateField(rule.field) && this.customDateRuleIds.has(rule.id)) {
-				// Keep typed custom dates; blank custom values stay blank (match nothing).
 				value = value === CUSTOM_DATE_VALUE ? "" : value;
+				if (rule.operator === "within") {
+					const days = parseLastDaysCount(value);
+					value = days !== null ? formatLastDaysValue(days) : value;
+				}
 			}
 			if (rule.field.startsWith("frontmatter:")) {
 				const key = rule.field.slice("frontmatter:".length).trim() || "property";

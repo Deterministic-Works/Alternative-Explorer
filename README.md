@@ -25,7 +25,7 @@ Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alt
 
 Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). Right-click a note in the list to pin or unpin it. If Bookmarks is disabled, pin/unpin shows a notice and the Pinned section stays empty. Use the **Pinned** control in the notes pane to show or hide the dedicated pinned group.
 
-Smart folders are stored in plugin settings (not as vault folders). Create one from the folders header, then set one or more rules against frontmatter properties, tags, name, path, created, or modified. For created/modified, choose relative ranges (today, yesterday, last 7/30 days, this/last week or month) or a custom date. Right-click a smart folder to edit rules, rename, or delete it. **Reveal current note** opens the active note’s parent folder (or **All notes** for vault-root notes), scrolls to the row, and briefly highlights it.
+Smart folders are stored in plugin settings (not as vault folders). Create one from the folders header, then set one or more rules against frontmatter properties, tags, name, path, created, or modified. For created/modified, choose relative ranges (today, yesterday, last 7/30 days, this/last week or month), a custom last-N-days count with **within**, or a custom date. Right-click a smart folder to edit rules, rename, or delete it. **Reveal current note** opens the active note’s parent folder (or **All notes** for vault-root notes), scrolls to the row, and briefly highlights it.
 
 ## Development
 
