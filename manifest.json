@@ -1,7 +1,7 @@
 {
 	"id": "alternative-explorer",
 	"name": "Alternative Explorer",
-	"version": "0.7.2",
+	"version": "0.7.3",
 	"minAppVersion": "1.5.0",
 	"description": "Browse folders and notes in an Apple Notes\u2013style sidebar that switches between folder and notes lists.",
 	"author": "Deterministic Works",
