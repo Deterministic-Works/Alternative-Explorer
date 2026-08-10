@@ -13,9 +13,10 @@ export interface SmartFolderNoteSnapshot {
 	mtime: number;
 	tags: string[];
 	frontmatter: Record<string, unknown>;
+	pinned: boolean;
 }
 
-const BUILTIN_FIELDS = new Set<string>(["tags", "name", "path", "ctime", "mtime"]);
+const BUILTIN_FIELDS = new Set<string>(["tags", "name", "path", "ctime", "mtime", "pinned"]);
 
 const OPERATORS = new Set<SmartFolderOperator>([
 	"equals",
@@ -206,6 +207,14 @@ export function noteMatchesRule(
 		return matchDate(noteTimestamp(note, rule.field), rule.operator, rule.value, now);
 	}
 
+	if (fieldKind === "boolean") {
+		if (rule.operator !== "equals" && rule.operator !== "not-equals") return false;
+		const expected = parseBooleanRuleValue(rule.value);
+		if (expected === null) return false;
+		const actual = note.pinned;
+		return rule.operator === "equals" ? actual === expected : actual !== expected;
+	}
+
 	if (!STRING_OPERATORS.has(rule.operator)) return false;
 
 	const values = fieldStringValues(note, rule.field);
@@ -232,9 +241,10 @@ export function noteMatchesRule(
 	}
 }
 
-function fieldKindOf(field: SmartFolderField): "string" | "date" | "tags" {
+function fieldKindOf(field: SmartFolderField): "string" | "date" | "tags" | "boolean" {
 	if (field === "ctime" || field === "mtime") return "date";
 	if (field === "tags") return "tags";
+	if (field === "pinned") return "boolean";
 	return "string";
 }
 
@@ -244,6 +254,7 @@ function fieldExists(note: SmartFolderNoteSnapshot, field: SmartFolderField): bo
 	if (field === "path") return note.path.length > 0;
 	if (field === "ctime") return Number.isFinite(note.ctime);
 	if (field === "mtime") return Number.isFinite(note.mtime);
+	if (field === "pinned") return note.pinned;
 	const key = frontmatterKey(field);
 	if (!key) return false;
 	const value = note.frontmatter[key];
@@ -263,11 +274,32 @@ function fieldStringValues(note: SmartFolderNoteSnapshot, field: SmartFolderFiel
 	}
 	if (field === "name") return note.name ? [note.name] : [];
 	if (field === "path") return note.path ? [note.path] : [];
-	if (field === "ctime" || field === "mtime") return [];
+	if (field === "ctime" || field === "mtime" || field === "pinned") return [];
 
 	const key = frontmatterKey(field);
 	if (!key) return [];
 	return coerceToStrings(note.frontmatter[key]);
+}
+
+export function parseBooleanRuleValue(rawValue: string): boolean | null {
+	const normalized = rawValue.trim().toLowerCase();
+	if (
+		normalized === "true" ||
+		normalized === "yes" ||
+		normalized === "pinned" ||
+		normalized === "1"
+	) {
+		return true;
+	}
+	if (
+		normalized === "false" ||
+		normalized === "no" ||
+		normalized === "unpinned" ||
+		normalized === "0"
+	) {
+		return false;
+	}
+	return null;
 }
 
 function frontmatterKey(field: SmartFolderField): string | null {

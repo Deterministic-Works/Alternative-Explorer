@@ -1555,9 +1555,12 @@ export class AlternativeExplorerView extends ItemView {
 				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
 				: undefined;
 			if (!smartFolder) return [];
+			const pinnedPaths = getBookmarkedFilePaths(this.app);
 			return this.app.vault
 				.getFiles()
-				.filter((file) => noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file), smartFolder));
+				.filter((file) =>
+					noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file, pinnedPaths), smartFolder)
+				);
 		}
 
 		const folder = this.app.vault.getAbstractFileByPath(scope);
@@ -1568,7 +1571,10 @@ export class AlternativeExplorerView extends ItemView {
 		return this.getFiles(folder, this.plugin.settings.recursive);
 	}
 
-	private toSmartFolderNoteSnapshot(file: TFile): SmartFolderNoteSnapshot {
+	private toSmartFolderNoteSnapshot(
+		file: TFile,
+		pinnedPaths: ReadonlySet<string> = getBookmarkedFilePaths(this.app)
+	): SmartFolderNoteSnapshot {
 		const cache = this.app.metadataCache.getFileCache(file);
 		const tags = cache ? getAllTags(cache) ?? [] : [];
 		const frontmatter =
@@ -1582,6 +1588,7 @@ export class AlternativeExplorerView extends ItemView {
 			mtime: file.stat.mtime,
 			tags,
 			frontmatter,
+			pinned: pinnedPaths.has(file.path),
 		};
 	}
 
@@ -1655,9 +1662,12 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private smartFolderSummary(smartFolder: SmartFolder): string {
+		const pinnedPaths = getBookmarkedFilePaths(this.app);
 		const count = this.app.vault
 			.getFiles()
-			.filter((file) => noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file), smartFolder))
+			.filter((file) =>
+				noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file, pinnedPaths), smartFolder)
+			)
 			.length;
 		return `${count} ${count === 1 ? "note" : "notes"}`;
 	}
