@@ -22,6 +22,7 @@ import {
 	sortFolderPaths,
 } from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
+import { SectionNameModal } from "./section-name-modal";
 
 type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
 
@@ -782,9 +783,14 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private async createSection(initialFolderPath?: string): Promise<void> {
-		const name = window.prompt("Section name", "New section");
-		if (name === null) return;
+	private createSection(initialFolderPath?: string): void {
+		new SectionNameModal(this.app, "New section", "New section", "Create", (name) => {
+			if (name === null) return;
+			void this.finishCreateSection(name, initialFolderPath);
+		}).open();
+	}
+
+	private async finishCreateSection(name: string, initialFolderPath?: string): Promise<void> {
 		const section = createFolderSection(name, initialFolderPath ? [initialFolderPath] : []);
 		if (initialFolderPath) {
 			this.plugin.settings.folderSections = moveFolderToSection(
@@ -1024,9 +1030,14 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private async renameFolderSection(sectionId: string, currentName: string): Promise<void> {
-		const name = window.prompt("Section name", currentName);
-		if (name === null) return;
+	private renameFolderSection(sectionId: string, currentName: string): void {
+		new SectionNameModal(this.app, "Rename section", currentName, "Save", (name) => {
+			if (name === null) return;
+			void this.finishRenameFolderSection(sectionId, name);
+		}).open();
+	}
+
+	private async finishRenameFolderSection(sectionId: string, name: string): Promise<void> {
 		this.plugin.settings.folderSections = renameSection(
 			this.plugin.settings.folderSections,
 			sectionId,
