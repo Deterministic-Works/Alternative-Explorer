@@ -2,7 +2,7 @@
 
 Obsidian plugin: a calm, Apple Notes–style sidebar explorer with a single pane that switches between an expandable folder tree and a notes list.
 
-Source note: 2026-08-24; updated for expandable folder tree + note depth toggle.
+Source note: 2026-08-24; updated for expandable folder tree + note depth toggle; updated for folder sections and folder sort.
 
 ## Goals
 
@@ -11,23 +11,32 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 - Shows folders as an expandable tree in one pane (not drill-down into a child-only list)
 - Lets any folder (including nested ones) open that folder’s notes in the same pane
 - Groups notes with configurable sort/group controls and optional pinned bookmarks
+- Groups root folders into plugin-only sections with configurable in-section sort
 
 ## Features
 
-### 1. Customizable folder order
+### 1. Customizable folder order and sort
 
-- Folders can be ordered manually (not only by name / modified time).
-- Order is changed by drag and drop among siblings and persisted across sessions.
+- Root folders sort by **Name**, **Modified**, **Created**, or **Custom** (global rule applied inside each section and the unassigned list).
+- Custom order is changed by drag and drop and persisted across sessions.
+- Nested sibling folders keep a separate per-parent custom order via drag and drop.
 
-### 2. Expandable folder tree + notes switching
+### 2. Plugin-only folder sections
+
+- Named sections group root folders for display only (not vault folders).
+- Unassigned root folders appear as a loose list (no header) after **All notes** and before named sections.
+- Sections are ordered manually (drag headers); open by default; chevron collapses/expands (persisted).
+- Create from the folders header; assign via context menu or drag; rename/delete from section context menu.
+
+### 3. Expandable folder tree + notes switching
 
 - The folders pane always lists the vault from the root as a tree.
-- **All notes** appears first; vault folders follow.
+- **All notes** appears first; vault folders follow (unassigned, then sections).
 - Chevron expands/collapses subfolders inline in the same list (persisted).
 - Tapping a folder (at any depth) opens that folder’s notes list in the same pane.
 - Back from the notes pane returns to the folders pane (tree expansion state preserved).
 
-### 3. Note depth toggle
+### 4. Note depth toggle
 
 When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
@@ -39,7 +48,7 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 - **All notes** still lists every vault file (toggle hidden).
 - Sort / group / pinned controls sit right-aligned on the same header row.
 
-### 4. Readable, configurable notes list
+### 5. Readable, configurable notes list
 
 - Sort controls in the notes pane: **Name**, **Modified**, or **Created**, each ascending or descending.
 - Group-by controls: **None**, **Modified**, or **Created**.
@@ -47,19 +56,21 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
   - Empty sections are omitted.
 - Separate **Pinned** toggle: when on, bookmarked notes appear in a **Pinned** section first; when off, they stay in normal groups (still marked with a pin icon).
 - Nested note location is shown when listing recursively or under **All notes**.
+- Each note row shows the date under the title (compact padding so titles are not truncated).
 - Selecting a note opens it in the main editor leaf.
 - Right-click a note to **Pin** / **Unpin** (toggles a core Bookmarks file bookmark; requires Bookmarks enabled).
 
-### 5. Sidebar presentation
+### 6. Sidebar presentation
 
 - Opens in the left sidebar by default.
 - Visuals inherit the active Obsidian theme: transparent pane background, `--nav-item-*` colors/hover/active states, no plugin-owned surface colors.
 - Folder rows are compact and indented by depth, matching the native file explorer density.
+- **All notes** uses the same icon column as folder rows.
 
 ## Interaction model (summary)
 
-1. Folders pane: All notes + expandable vault tree; drag to reorder siblings.
-2. Chevron → expand/collapse; folder body → notes pane for that folder.
+1. Folders pane: All notes + unassigned root folders + named sections; New section / Sort in header; drag to reorder (custom) or reassign; drag section headers to reorder sections.
+2. Chevron → expand/collapse folder or section; folder body → notes pane for that folder.
 3. Notes pane: Back → folders; icon depth toggle (This folder / All below); right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
 
 ## Out of scope (for now)

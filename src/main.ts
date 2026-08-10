@@ -2,6 +2,9 @@ import { Plugin, TFolder, WorkspaceLeaf } from "obsidian";
 import {
 	AlternativeExplorerSettings,
 	ExplorerPane,
+	FolderSection,
+	FolderSortBy,
+	FolderSortDir,
 	NoteGroupBy,
 	NoteSortBy,
 	NoteSortDir,
@@ -9,6 +12,7 @@ import {
 	createDefaultSettings,
 } from "./constants";
 import { replacePathPrefix } from "./folder-order";
+import { pruneFolderSections, remapFolderSections } from "./folder-sections";
 import { AlternativeExplorerView } from "./view";
 
 export default class AlternativeExplorerPlugin extends Plugin {
@@ -39,9 +43,10 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("delete", () => {
 				let dirty = this.ensureCurrentFolderExists();
-				const before = this.settings.expandedFolders.length;
+				const beforeExpanded = this.settings.expandedFolders.length;
 				this.pruneExpandedFolders();
-				if (this.settings.expandedFolders.length !== before) dirty = true;
+				if (this.settings.expandedFolders.length !== beforeExpanded) dirty = true;
+				if (this.pruneSectionMembership()) dirty = true;
 				if (dirty) {
 					void this.saveSettings();
 				}
@@ -80,6 +85,10 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			recursive: typeof saved?.recursive === "boolean" ? saved.recursive : defaults.recursive,
 			expandedFolders: this.parseExpandedFolders(saved?.expandedFolders),
 			folderOrder: this.parseFolderOrder(saved?.folderOrder),
+			folderSections: this.parseFolderSections(saved?.folderSections),
+			collapsedSectionIds: this.parseExpandedFolders(saved?.collapsedSectionIds),
+			folderSortBy: this.parseFolderSortBy(saved?.folderSortBy),
+			folderSortDir: this.parseFolderSortDir(saved?.folderSortDir),
 			sortBy: this.parseSortBy(saved?.sortBy),
 			sortDir: this.parseSortDir(saved?.sortDir),
 			groupBy: this.parseGroupBy(saved?.groupBy),
@@ -88,6 +97,8 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		};
 		this.ensureCurrentFolderExists();
 		this.pruneExpandedFolders();
+		this.pruneSectionMembership();
+		this.pruneCollapsedSections();
 	}
 
 	async saveSettings(): Promise<void> {
@@ -155,6 +166,11 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			);
 		}
 		this.settings.folderOrder = remappedOrder;
+		this.settings.folderSections = remapFolderSections(
+			this.settings.folderSections,
+			oldPath,
+			newPath
+		);
 		await this.saveSettings();
 	}
 
@@ -163,6 +179,27 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			const folder = this.app.vault.getAbstractFileByPath(path);
 			return folder instanceof TFolder;
 		});
+	}
+
+	private pruneSectionMembership(): boolean {
+		const root = this.app.vault.getRoot();
+		const rootPaths = root.children
+			.filter((child): child is TFolder => child instanceof TFolder)
+			.map((child) => child.path);
+		const before = JSON.stringify(this.settings.folderSections);
+		this.settings.folderSections = pruneFolderSections(
+			this.settings.folderSections,
+			rootPaths
+		);
+		this.pruneCollapsedSections();
+		return JSON.stringify(this.settings.folderSections) !== before;
+	}
+
+	private pruneCollapsedSections(): void {
+		const ids = new Set(this.settings.folderSections.map((section) => section.id));
+		this.settings.collapsedSectionIds = this.settings.collapsedSectionIds.filter((id) =>
+			ids.has(id)
+		);
 	}
 
 	private parseExpandedFolders(value: unknown): string[] {
@@ -186,6 +223,16 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		return value === "asc" || value === "desc" ? value : "desc";
 	}
 
+	private parseFolderSortBy(value: unknown): FolderSortBy {
+		return value === "name" || value === "mtime" || value === "ctime" || value === "custom"
+			? value
+			: "custom";
+	}
+
+	private parseFolderSortDir(value: unknown): FolderSortDir {
+		return value === "asc" || value === "desc" ? value : "asc";
+	}
+
 	private parseGroupBy(value: unknown): NoteGroupBy {
 		return value === "none" || value === "mtime" || value === "ctime" ? value : "mtime";
 	}
@@ -203,5 +250,25 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			);
 		}
 		return parsed;
+	}
+
+	private parseFolderSections(value: unknown): FolderSection[] {
+		if (!Array.isArray(value)) return [];
+		const sections: FolderSection[] = [];
+		for (const entry of value) {
+			if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+			const record = entry as Record<string, unknown>;
+			if (typeof record.id !== "string" || record.id.length === 0) continue;
+			if (typeof record.name !== "string") continue;
+			const folderPaths = Array.isArray(record.folderPaths)
+				? record.folderPaths.filter((path): path is string => typeof path === "string")
+				: [];
+			sections.push({
+				id: record.id,
+				name: record.name.trim() || "Untitled",
+				folderPaths,
+			});
+		}
+		return sections;
 	}
 }

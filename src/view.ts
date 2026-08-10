@@ -1,6 +1,8 @@
 import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import {
+	FolderSortBy,
+	FolderSortDir,
 	NoteGroupBy,
 	NoteSortBy,
 	NoteSortDir,
@@ -8,14 +10,34 @@ import {
 } from "./constants";
 import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
+import {
+	createFolderSection,
+	deleteSection,
+	findSectionIdForFolder,
+	insertFolderInSection,
+	moveFolderToSection,
+	partitionRootFolders,
+	renameSection,
+	reorderSections,
+	sortFolderPaths,
+} from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
 
-type FolderAction = "select" | "toggle" | "back-to-folders";
+type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
+
+const UNASSIGNED_SECTION_ID = "";
 
 const SORT_BY_LABELS: Record<NoteSortBy, string> = {
 	name: "Name",
 	mtime: "Modified",
 	ctime: "Created",
+};
+
+const FOLDER_SORT_BY_LABELS: Record<FolderSortBy, string> = {
+	name: "Name",
+	mtime: "Modified",
+	ctime: "Created",
+	custom: "Custom",
 };
 
 const GROUP_BY_LABELS: Record<NoteGroupBy, string> = {
@@ -26,6 +48,8 @@ const GROUP_BY_LABELS: Record<NoteGroupBy, string> = {
 
 export class AlternativeExplorerView extends ItemView {
 	private draggedFolderPath: string | null = null;
+	private draggedSectionId: string | null = null;
+	private folderStatCache = new Map<string, { mtime: number; ctime: number }>();
 
 	constructor(leaf: WorkspaceLeaf, private readonly plugin: AlternativeExplorerPlugin) {
 		super(leaf);
@@ -51,11 +75,14 @@ export class AlternativeExplorerView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.draggedFolderPath = null;
+		this.draggedSectionId = null;
+		this.folderStatCache.clear();
 	}
 
 	render(): void {
 		const container = this.contentEl;
 		container.empty();
+		this.folderStatCache.clear();
 
 		const browser = container.createEl("main", { cls: "alternative-explorer-browser" });
 		if (this.plugin.settings.pane === "notes") {
@@ -73,9 +100,14 @@ export class AlternativeExplorerView extends ItemView {
 				event.preventDefault();
 				const action = folderControl.dataset.folderAction as FolderAction | undefined;
 				const path = folderControl.dataset.folderPath;
+				const sectionId = folderControl.dataset.sectionId;
 				if (!action) return;
 				if (action === "back-to-folders") {
 					void this.backToFolders();
+					return;
+				}
+				if (action === "toggle-section" && sectionId) {
+					void this.toggleSectionCollapsed(sectionId);
 					return;
 				}
 				if (path) {
@@ -91,10 +123,28 @@ export class AlternativeExplorerView extends ItemView {
 				return;
 			}
 
+			const newSectionControl = element.closest<HTMLButtonElement>(
+				"button[data-new-section]"
+			);
+			if (newSectionControl) {
+				event.preventDefault();
+				void this.createSection();
+				return;
+			}
+
 			const recursiveControl = element.closest<HTMLButtonElement>("button[data-recursive]");
 			if (recursiveControl) {
 				event.preventDefault();
 				void this.setRecursive(recursiveControl.dataset.recursive === "true");
+				return;
+			}
+
+			const folderSortMenuControl = element.closest<HTMLButtonElement>(
+				"button[data-open-folder-sort-menu]"
+			);
+			if (folderSortMenuControl) {
+				event.preventDefault();
+				this.showFolderSortMenu(event, folderSortMenuControl);
 				return;
 			}
 
@@ -129,9 +179,26 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.registerDomEvent(this.contentEl, "contextmenu", (event) => {
-			const fileControl = (event.target as HTMLElement).closest<HTMLButtonElement>(
-				"button[data-file-path]"
+			const target = event.target as HTMLElement;
+			const sectionHeader = target.closest<HTMLElement>(
+				".alternative-explorer-folder-section-header[data-section-id]"
 			);
+			if (sectionHeader?.dataset.sectionId) {
+				event.preventDefault();
+				this.showSectionContextMenu(event, sectionHeader.dataset.sectionId);
+				return;
+			}
+
+			const folderRow = target.closest<HTMLElement>(
+				".alternative-explorer-folder-row[data-folder-path]"
+			);
+			if (folderRow?.dataset.folderPath && folderRow.dataset.depth === "0") {
+				event.preventDefault();
+				this.showFolderContextMenu(event, folderRow.dataset.folderPath);
+				return;
+			}
+
+			const fileControl = target.closest<HTMLButtonElement>("button[data-file-path]");
 			const path = fileControl?.dataset.filePath;
 			if (!path) return;
 
@@ -140,7 +207,22 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.registerDomEvent(this.contentEl, "dragstart", (event) => {
-			const row = (event.target as HTMLElement).closest<HTMLElement>(
+			const target = event.target as HTMLElement;
+			const sectionHeader = target.closest<HTMLElement>(
+				".alternative-explorer-folder-section-header[data-section-id]"
+			);
+			if (sectionHeader?.dataset.sectionId) {
+				this.draggedSectionId = sectionHeader.dataset.sectionId;
+				this.draggedFolderPath = null;
+				event.dataTransfer?.setData("text/plain", `section:${sectionHeader.dataset.sectionId}`);
+				if (event.dataTransfer) {
+					event.dataTransfer.effectAllowed = "move";
+				}
+				sectionHeader.addClass("is-dragging");
+				return;
+			}
+
+			const row = target.closest<HTMLElement>(
 				".alternative-explorer-folder-row[data-folder-path]"
 			);
 			const path = row?.dataset.folderPath;
@@ -150,6 +232,7 @@ export class AlternativeExplorerView extends ItemView {
 			}
 
 			this.draggedFolderPath = path;
+			this.draggedSectionId = null;
 			event.dataTransfer?.setData("text/plain", path);
 			if (event.dataTransfer) {
 				event.dataTransfer.effectAllowed = "move";
@@ -158,27 +241,53 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.registerDomEvent(this.contentEl, "dragover", (event) => {
-			const row = this.getValidDropTarget(event.target);
-			if (!row) return;
+			if (this.draggedSectionId) {
+				const header = this.getValidSectionDropTarget(event.target);
+				if (!header) return;
+				event.preventDefault();
+				if (event.dataTransfer) {
+					event.dataTransfer.dropEffect = "move";
+				}
+				this.clearDropTargets();
+				header.addClass(
+					event.clientY <
+						header.getBoundingClientRect().top + header.getBoundingClientRect().height / 2
+						? "is-drop-before"
+						: "is-drop-after"
+				);
+				return;
+			}
+
+			const drop = this.getValidFolderDropTarget(event.target);
+			if (!drop) return;
 			event.preventDefault();
 			if (event.dataTransfer) {
 				event.dataTransfer.dropEffect = "move";
 			}
 			this.clearDropTargets();
-			row.addClass(
-				event.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2
-					? "is-drop-before"
-					: "is-drop-after"
+			const rect = drop.element.getBoundingClientRect();
+			drop.element.addClass(
+				event.clientY < rect.top + rect.height / 2 ? "is-drop-before" : "is-drop-after"
 			);
 		});
 
 		this.registerDomEvent(this.contentEl, "drop", (event) => {
-			const row = this.getValidDropTarget(event.target);
-			const targetPath = row?.dataset.folderPath;
-			if (!targetPath || !this.draggedFolderPath) return;
+			if (this.draggedSectionId) {
+				const header = this.getValidSectionDropTarget(event.target);
+				const targetId = header?.dataset.sectionId;
+				if (!targetId) return;
+				event.preventDefault();
+				const position = header.hasClass("is-drop-after") ? "after" : "before";
+				void this.moveSectionRelativeToTarget(this.draggedSectionId, targetId, position);
+				this.finishDrag();
+				return;
+			}
+
+			const drop = this.getValidFolderDropTarget(event.target);
+			if (!drop || !this.draggedFolderPath) return;
 			event.preventDefault();
-			const position = row.hasClass("is-drop-after") ? "after" : "before";
-			void this.moveFolderRelativeToTarget(this.draggedFolderPath, targetPath, position);
+			const position = drop.element.hasClass("is-drop-after") ? "after" : "before";
+			void this.handleFolderDrop(this.draggedFolderPath, drop, position);
 			this.finishDrag();
 		});
 
@@ -199,13 +308,39 @@ export class AlternativeExplorerView extends ItemView {
 		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
 		this.renderAllNotesRow(list);
 
-		const folders = this.getOrderedSubfolders(root);
-		if (folders.length === 0) {
-			return;
+		const rootFolders = root.children.filter(
+			(child): child is TFolder => child instanceof TFolder
+		);
+		const rootPaths = rootFolders.map((folder) => folder.path);
+		const byPath = new Map(rootFolders.map((folder) => [folder.path, folder]));
+		const { unassigned, sections } = partitionRootFolders(
+			rootPaths,
+			this.plugin.settings.folderSections
+		);
+
+		const unassignedSorted = this.sortRootFolderPaths(
+			unassigned,
+			this.plugin.settings.folderOrder[root.path]
+		);
+		if (unassignedSorted.length > 0) {
+			const unassignedList = list.createDiv({
+				cls: "alternative-explorer-folder-group",
+				attr: { "data-section-id": UNASSIGNED_SECTION_ID, "data-drop-zone": "unassigned" },
+			});
+			for (const path of unassignedSorted) {
+				const folder = byPath.get(path);
+				if (!folder) continue;
+				this.renderFolderBranch(unassignedList, root, folder, 0, UNASSIGNED_SECTION_ID);
+			}
+		} else if (sections.length > 0) {
+			list.createDiv({
+				cls: "alternative-explorer-folder-group is-empty-drop-zone",
+				attr: { "data-section-id": UNASSIGNED_SECTION_ID, "data-drop-zone": "unassigned" },
+			});
 		}
 
-		for (const child of folders) {
-			this.renderFolderBranch(list, root, child, 0);
+		for (const folderSection of sections) {
+			this.renderFolderSection(list, root, folderSection, byPath);
 		}
 	}
 
@@ -213,10 +348,113 @@ export class AlternativeExplorerView extends ItemView {
 		const header = container.createEl("header", { cls: "alternative-explorer-header" });
 		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
 		heading.createEl("h1", { text: "Folders" });
+
+		const controls = heading.createDiv({
+			cls: "alternative-explorer-list-controls",
+			attr: { "aria-label": "Folder controls" },
+		});
+
+		const newSectionButton = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-new-section": "true",
+				"aria-label": "New section",
+				title: "New section",
+			},
+		});
+		setIcon(newSectionButton, "folder-plus");
+
+		const { folderSortBy, folderSortDir } = this.plugin.settings;
+		const sortTitle =
+			folderSortBy === "custom"
+				? "Sort: Custom"
+				: `Sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
+		const sortButton = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-open-folder-sort-menu": "true",
+				"aria-haspopup": "menu",
+				"aria-label": sortTitle,
+				title: sortTitle,
+			},
+		});
+		setIcon(
+			sortButton,
+			folderSortBy === "custom"
+				? "list-ordered"
+				: folderSortDir === "asc"
+					? "arrow-up-narrow-wide"
+					: "arrow-down-wide-narrow"
+		);
+	}
+
+	private renderFolderSection(
+		list: HTMLElement,
+		root: TFolder,
+		folderSection: { id: string; name: string; folderPaths: string[] },
+		byPath: Map<string, TFolder>
+	): void {
+		const collapsed = this.plugin.settings.collapsedSectionIds.includes(folderSection.id);
+		const header = list.createDiv({
+			cls: `alternative-explorer-folder-section-header${collapsed ? "" : " is-expanded"}`,
+			attr: {
+				draggable: "true",
+				"data-section-id": folderSection.id,
+			},
+		});
+
+		const toggle = header.createEl("button", {
+			cls: `alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
+			attr: {
+				type: "button",
+				"data-folder-action": "toggle-section",
+				"data-section-id": folderSection.id,
+				"aria-expanded": String(!collapsed),
+				"aria-label": collapsed
+					? `Expand ${folderSection.name}`
+					: `Collapse ${folderSection.name}`,
+				title: collapsed ? `Expand ${folderSection.name}` : `Collapse ${folderSection.name}`,
+			},
+		});
+		setIcon(toggle, "chevron-right");
+
+		header.createSpan({
+			cls: "alternative-explorer-folder-section-name",
+			text: folderSection.name,
+		});
+
+		const dragHandle = header.createSpan({
+			cls: "alternative-explorer-drag-handle",
+			attr: { "aria-hidden": "true" },
+		});
+		setIcon(dragHandle, "grip-vertical");
+
+		if (collapsed) {
+			return;
+		}
+
+		const group = list.createDiv({
+			cls: "alternative-explorer-folder-group",
+			attr: { "data-section-id": folderSection.id },
+		});
+		const sorted = this.sortRootFolderPaths(folderSection.folderPaths, folderSection.folderPaths);
+		if (sorted.length === 0) {
+			group.addClass("is-empty-drop-zone");
+			return;
+		}
+
+		for (const path of sorted) {
+			const folder = byPath.get(path);
+			if (!folder) continue;
+			this.renderFolderBranch(group, root, folder, 0, folderSection.id);
+		}
 	}
 
 	private renderAllNotesRow(list: HTMLElement): void {
 		const row = list.createDiv({ cls: "alternative-explorer-folder-row is-smart-row" });
+		row.createSpan({ cls: "alternative-explorer-folder-toggle-spacer" });
 		const button = row.createEl("button", {
 			cls: "alternative-explorer-folder-button",
 			attr: {
@@ -241,14 +479,15 @@ export class AlternativeExplorerView extends ItemView {
 		list: HTMLElement,
 		parent: TFolder,
 		folder: TFolder,
-		depth: number
+		depth: number,
+		sectionId: string = UNASSIGNED_SECTION_ID
 	): void {
-		this.renderFolderRow(list, parent, folder, depth);
+		this.renderFolderRow(list, parent, folder, depth, sectionId);
 
 		if (!this.isExpanded(folder.path)) return;
 
 		for (const child of this.getOrderedSubfolders(folder)) {
-			this.renderFolderBranch(list, folder, child, depth + 1);
+			this.renderFolderBranch(list, folder, child, depth + 1, sectionId);
 		}
 	}
 
@@ -256,11 +495,14 @@ export class AlternativeExplorerView extends ItemView {
 		list: HTMLElement,
 		parent: TFolder,
 		child: TFolder,
-		depth: number
+		depth: number,
+		sectionId: string
 	): void {
 		const hasSubfolders = child.children.some((entry) => entry instanceof TFolder);
 		const expanded = this.isExpanded(child.path);
 		const selected = this.plugin.settings.notesScope === child.path;
+		const root = this.app.vault.getRoot();
+		const isRootChild = parent.path === root.path;
 
 		const row = list.createDiv({
 			cls: `alternative-explorer-folder-row${selected ? " is-selected" : ""}`,
@@ -268,6 +510,7 @@ export class AlternativeExplorerView extends ItemView {
 				draggable: "true",
 				"data-folder-path": child.path,
 				"data-parent-path": parent.path,
+				"data-section-id": isRootChild ? sectionId : "",
 				"data-depth": String(depth),
 				style: `--folder-depth: ${depth}`,
 			},
@@ -502,7 +745,7 @@ export class AlternativeExplorerView extends ItemView {
 		}
 		const dateValue =
 			this.plugin.settings.sortBy === "ctime" ? file.stat.ctime : file.stat.mtime;
-		row.createEl("time", {
+		copy.createEl("time", {
 			cls: "alternative-explorer-file-date",
 			text: moment(dateValue).format("MMM D"),
 			attr: {
@@ -527,6 +770,38 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
+	private async toggleSectionCollapsed(sectionId: string): Promise<void> {
+		const collapsed = this.plugin.settings.collapsedSectionIds;
+		const index = collapsed.indexOf(sectionId);
+		if (index >= 0) {
+			collapsed.splice(index, 1);
+		} else {
+			collapsed.push(sectionId);
+		}
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async createSection(initialFolderPath?: string): Promise<void> {
+		const name = window.prompt("Section name", "New section");
+		if (name === null) return;
+		const section = createFolderSection(name, initialFolderPath ? [initialFolderPath] : []);
+		if (initialFolderPath) {
+			this.plugin.settings.folderSections = moveFolderToSection(
+				this.plugin.settings.folderSections,
+				initialFolderPath,
+				null
+			);
+			this.removeFromUnassignedOrder(initialFolderPath);
+		}
+		this.plugin.settings.folderSections = [
+			...this.plugin.settings.folderSections,
+			section,
+		];
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
 	private async setRecursive(recursive: boolean): Promise<void> {
 		if (this.plugin.settings.recursive === recursive) return;
 		this.plugin.settings.recursive = recursive;
@@ -547,6 +822,19 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
+	private async setFolderSort(sortBy: FolderSortBy, sortDir: FolderSortDir): Promise<void> {
+		if (
+			this.plugin.settings.folderSortBy === sortBy &&
+			this.plugin.settings.folderSortDir === sortDir
+		) {
+			return;
+		}
+		this.plugin.settings.folderSortBy = sortBy;
+		this.plugin.settings.folderSortDir = sortDir;
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
 	private async setGroupBy(groupBy: NoteGroupBy): Promise<void> {
 		if (this.plugin.settings.groupBy === groupBy) return;
 		this.plugin.settings.groupBy = groupBy;
@@ -559,6 +847,48 @@ export class AlternativeExplorerView extends ItemView {
 		this.plugin.settings.groupPinned = groupPinned;
 		await this.plugin.saveSettings();
 		this.render();
+	}
+
+	private showFolderSortMenu(event: MouseEvent, anchor: HTMLElement): void {
+		const menu = new Menu();
+		for (const sortBy of ["name", "mtime", "ctime", "custom"] as const) {
+			menu.addItem((item) => {
+				item
+					.setTitle(FOLDER_SORT_BY_LABELS[sortBy])
+					.setChecked(this.plugin.settings.folderSortBy === sortBy)
+					.onClick(() => {
+						const nextDir =
+							sortBy === "name"
+								? "asc"
+								: sortBy === "custom"
+									? this.plugin.settings.folderSortDir
+									: "desc";
+						void this.setFolderSort(sortBy, nextDir);
+					});
+			});
+		}
+		if (this.plugin.settings.folderSortBy !== "custom") {
+			menu.addSeparator();
+			menu.addItem((item) => {
+				item
+					.setTitle("Ascending")
+					.setChecked(this.plugin.settings.folderSortDir === "asc")
+					.onClick(() => {
+						void this.setFolderSort(this.plugin.settings.folderSortBy, "asc");
+					});
+			});
+			menu.addItem((item) => {
+				item
+					.setTitle("Descending")
+					.setChecked(this.plugin.settings.folderSortDir === "desc")
+					.onClick(() => {
+						void this.setFolderSort(this.plugin.settings.folderSortBy, "desc");
+					});
+			});
+		}
+		const rect = anchor.getBoundingClientRect();
+		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+		event.stopPropagation();
 	}
 
 	private showSortMenu(event: MouseEvent, anchor: HTMLElement): void {
@@ -612,6 +942,116 @@ export class AlternativeExplorerView extends ItemView {
 		event.stopPropagation();
 	}
 
+	private showFolderContextMenu(event: MouseEvent, folderPath: string): void {
+		const menu = Menu.forEvent(event);
+		const currentSectionId = findSectionIdForFolder(
+			this.plugin.settings.folderSections,
+			folderPath
+		);
+
+		menu.addItem((item) => {
+			item.setTitle("Move to section").setDisabled(true);
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("No section")
+				.setChecked(currentSectionId === null)
+				.onClick(() => {
+					void this.assignFolderToSection(folderPath, null);
+				});
+		});
+
+		for (const section of this.plugin.settings.folderSections) {
+			menu.addItem((item) => {
+				item
+					.setTitle(section.name)
+					.setChecked(currentSectionId === section.id)
+					.onClick(() => {
+						void this.assignFolderToSection(folderPath, section.id);
+					});
+			});
+		}
+
+		menu.addSeparator();
+		menu.addItem((item) => {
+			item
+				.setTitle("New section with folder")
+				.setIcon("folder-plus")
+				.onClick(() => {
+					void this.createSection(folderPath);
+				});
+		});
+	}
+
+	private showSectionContextMenu(event: MouseEvent, sectionId: string): void {
+		const section = this.plugin.settings.folderSections.find((entry) => entry.id === sectionId);
+		if (!section) return;
+
+		const menu = Menu.forEvent(event);
+		menu.addItem((item) => {
+			item
+				.setTitle("Rename")
+				.setIcon("pencil")
+				.onClick(() => {
+					void this.renameFolderSection(sectionId, section.name);
+				});
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("Delete section")
+				.setIcon("trash")
+				.onClick(() => {
+					void this.deleteFolderSection(sectionId);
+				});
+		});
+	}
+
+	private async assignFolderToSection(
+		folderPath: string,
+		sectionId: string | null
+	): Promise<void> {
+		this.plugin.settings.folderSections = moveFolderToSection(
+			this.plugin.settings.folderSections,
+			folderPath,
+			sectionId
+		);
+		if (sectionId === null) {
+			this.appendToUnassignedOrder(folderPath);
+		} else {
+			this.removeFromUnassignedOrder(folderPath);
+		}
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async renameFolderSection(sectionId: string, currentName: string): Promise<void> {
+		const name = window.prompt("Section name", currentName);
+		if (name === null) return;
+		this.plugin.settings.folderSections = renameSection(
+			this.plugin.settings.folderSections,
+			sectionId,
+			name
+		);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async deleteFolderSection(sectionId: string): Promise<void> {
+		const section = this.plugin.settings.folderSections.find((entry) => entry.id === sectionId);
+		if (!section) return;
+		for (const path of section.folderPaths) {
+			this.appendToUnassignedOrder(path);
+		}
+		this.plugin.settings.folderSections = deleteSection(
+			this.plugin.settings.folderSections,
+			sectionId
+		);
+		this.plugin.settings.collapsedSectionIds =
+			this.plugin.settings.collapsedSectionIds.filter((id) => id !== sectionId);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
 	private async openAllNotes(): Promise<void> {
 		this.plugin.settings.pane = "notes";
 		this.plugin.settings.notesScope = "all";
@@ -625,7 +1065,86 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private async moveFolderRelativeToTarget(
+	private async moveSectionRelativeToTarget(
+		sectionId: string,
+		targetId: string,
+		position: "after" | "before"
+	): Promise<void> {
+		this.plugin.settings.folderSections = reorderSections(
+			this.plugin.settings.folderSections,
+			sectionId,
+			targetId,
+			position
+		);
+		await this.plugin.saveSettings();
+		this.plugin.refreshViews();
+	}
+
+	private async handleFolderDrop(
+		folderPath: string,
+		drop: { kind: "folder" | "zone"; element: HTMLElement; sectionId: string; folderPath?: string },
+		position: "before" | "after"
+	): Promise<void> {
+		const folder = this.app.vault.getAbstractFileByPath(folderPath);
+		if (!(folder instanceof TFolder)) return;
+
+		const root = this.app.vault.getRoot();
+		const isRootFolder = folder.parent?.path === root.path;
+
+		if (!isRootFolder) {
+			const targetPath = drop.folderPath;
+			if (!targetPath) return;
+			await this.moveNestedFolderRelativeToTarget(folderPath, targetPath, position);
+			return;
+		}
+
+		const targetSectionId = drop.sectionId;
+		const custom = this.plugin.settings.folderSortBy === "custom";
+
+		if (targetSectionId === UNASSIGNED_SECTION_ID) {
+			this.plugin.settings.folderSections = moveFolderToSection(
+				this.plugin.settings.folderSections,
+				folderPath,
+				null
+			);
+			if (custom && drop.kind === "folder" && drop.folderPath) {
+				const order = mergeFolderOrder(
+					this.plugin.settings.folderOrder[root.path],
+					this.currentUnassignedPaths().concat(folderPath)
+				);
+				this.plugin.settings.folderOrder[root.path] = moveFolderRelative(
+					order.includes(folderPath) ? order : [...order, folderPath],
+					folderPath,
+					drop.folderPath,
+					position
+				);
+			} else {
+				this.appendToUnassignedOrder(folderPath);
+			}
+		} else {
+			this.removeFromUnassignedOrder(folderPath);
+			if (custom && drop.kind === "folder" && drop.folderPath) {
+				this.plugin.settings.folderSections = insertFolderInSection(
+					this.plugin.settings.folderSections,
+					targetSectionId,
+					folderPath,
+					drop.folderPath,
+					position
+				);
+			} else {
+				this.plugin.settings.folderSections = moveFolderToSection(
+					this.plugin.settings.folderSections,
+					folderPath,
+					targetSectionId
+				);
+			}
+		}
+
+		await this.plugin.saveSettings();
+		this.plugin.refreshViews();
+	}
+
+	private async moveNestedFolderRelativeToTarget(
 		folderPath: string,
 		targetPath: string,
 		position: "after" | "before"
@@ -686,6 +1205,53 @@ export class AlternativeExplorerView extends ItemView {
 		}
 	}
 
+	private sortRootFolderPaths(
+		paths: readonly string[],
+		customOrder: readonly string[] | undefined
+	): string[] {
+		return sortFolderPaths(paths, {
+			sortBy: this.plugin.settings.folderSortBy,
+			sortDir: this.plugin.settings.folderSortDir,
+			customOrder,
+			getName: (path) => {
+				const folder = this.app.vault.getAbstractFileByPath(path);
+				return folder instanceof TFolder ? folder.name : path;
+			},
+			getTimestamp: (path, kind) => this.getFolderTimestamp(path, kind),
+		});
+	}
+
+	private getFolderTimestamp(path: string, kind: "mtime" | "ctime"): number {
+		const cached = this.folderStatCache.get(path);
+		if (cached) return cached[kind];
+
+		const folder = this.app.vault.getAbstractFileByPath(path);
+		if (!(folder instanceof TFolder)) return 0;
+
+		// Folder mtime/ctime from newest/oldest contained note (adapter.stat is async).
+		let mtime = 0;
+		let ctime = Number.POSITIVE_INFINITY;
+		let found = false;
+		const visit = (current: TFolder): void => {
+			for (const child of current.children) {
+				if (child instanceof TFile) {
+					found = true;
+					mtime = Math.max(mtime, child.stat.mtime);
+					ctime = Math.min(ctime, child.stat.ctime);
+				} else if (child instanceof TFolder) {
+					visit(child);
+				}
+			}
+		};
+		visit(folder);
+		const stats = {
+			mtime: found ? mtime : 0,
+			ctime: found && ctime !== Number.POSITIVE_INFINITY ? ctime : 0,
+		};
+		this.folderStatCache.set(path, stats);
+		return stats[kind];
+	}
+
 	private getOrderedSubfolders(folder: TFolder): TFolder[] {
 		const folders = folder.children.filter((child): child is TFolder => child instanceof TFolder);
 		const byPath = new Map(folders.map((child) => [child.path, child]));
@@ -695,6 +1261,28 @@ export class AlternativeExplorerView extends ItemView {
 		)
 			.map((path) => byPath.get(path))
 			.filter((child): child is TFolder => child !== undefined);
+	}
+
+	private currentUnassignedPaths(): string[] {
+		const root = this.app.vault.getRoot();
+		const rootPaths = root.children
+			.filter((child): child is TFolder => child instanceof TFolder)
+			.map((child) => child.path);
+		return partitionRootFolders(rootPaths, this.plugin.settings.folderSections).unassigned;
+	}
+
+	private appendToUnassignedOrder(folderPath: string): void {
+		const rootPath = this.app.vault.getRoot().path;
+		const current = this.plugin.settings.folderOrder[rootPath] ?? [];
+		if (current.includes(folderPath)) return;
+		this.plugin.settings.folderOrder[rootPath] = [...current, folderPath];
+	}
+
+	private removeFromUnassignedOrder(folderPath: string): void {
+		const rootPath = this.app.vault.getRoot().path;
+		const current = this.plugin.settings.folderOrder[rootPath];
+		if (!current) return;
+		this.plugin.settings.folderOrder[rootPath] = current.filter((path) => path !== folderPath);
 	}
 
 	private getNotesForScope(): TFile[] {
@@ -764,17 +1352,86 @@ export class AlternativeExplorerView extends ItemView {
 		return parentPath;
 	}
 
-	private getValidDropTarget(target: EventTarget | null): HTMLElement | null {
+	private getValidSectionDropTarget(target: EventTarget | null): HTMLElement | null {
+		const header = (target as HTMLElement | null)?.closest<HTMLElement>(
+			".alternative-explorer-folder-section-header[data-section-id]"
+		);
+		if (!header || !this.draggedSectionId) return null;
+		if (header.dataset.sectionId === this.draggedSectionId) return null;
+		return header;
+	}
+
+	private getValidFolderDropTarget(
+		target: EventTarget | null
+	): { kind: "folder" | "zone"; element: HTMLElement; sectionId: string; folderPath?: string } | null {
+		if (!this.draggedFolderPath) return null;
+
+		const dragged = this.app.vault.getAbstractFileByPath(this.draggedFolderPath);
+		if (!(dragged instanceof TFolder)) return null;
+
+		const root = this.app.vault.getRoot();
+		const isRootDrag = dragged.parent?.path === root.path;
+
+		const header = (target as HTMLElement | null)?.closest<HTMLElement>(
+			".alternative-explorer-folder-section-header[data-section-id]"
+		);
+		if (header?.dataset.sectionId && isRootDrag) {
+			return {
+				kind: "zone",
+				element: header,
+				sectionId: header.dataset.sectionId,
+			};
+		}
+
+		const zone = (target as HTMLElement | null)?.closest<HTMLElement>(
+			".alternative-explorer-folder-group[data-section-id]"
+		);
 		const row = (target as HTMLElement | null)?.closest<HTMLElement>(
 			".alternative-explorer-folder-row[data-folder-path]"
 		);
-		if (!row || !this.draggedFolderPath) return null;
-		if (row.dataset.folderPath === this.draggedFolderPath) return null;
 
-		const dragged = this.app.vault.getAbstractFileByPath(this.draggedFolderPath);
-		return dragged instanceof TFolder && dragged.parent?.path === row.dataset.parentPath
-			? row
-			: null;
+		if (row?.dataset.folderPath) {
+			if (row.dataset.folderPath === this.draggedFolderPath) return null;
+
+			if (!isRootDrag) {
+				return dragged.parent?.path === row.dataset.parentPath
+					? {
+							kind: "folder",
+							element: row,
+							sectionId: row.dataset.sectionId ?? UNASSIGNED_SECTION_ID,
+							folderPath: row.dataset.folderPath,
+						}
+					: null;
+			}
+
+			if (row.dataset.depth !== "0") return null;
+
+			const targetSectionId = row.dataset.sectionId ?? UNASSIGNED_SECTION_ID;
+			const sourceSectionId =
+				findSectionIdForFolder(this.plugin.settings.folderSections, this.draggedFolderPath) ??
+				UNASSIGNED_SECTION_ID;
+			const sameGroup = targetSectionId === sourceSectionId;
+			if (sameGroup && this.plugin.settings.folderSortBy !== "custom") {
+				return null;
+			}
+
+			return {
+				kind: "folder",
+				element: row,
+				sectionId: targetSectionId,
+				folderPath: row.dataset.folderPath,
+			};
+		}
+
+		if (zone && isRootDrag) {
+			return {
+				kind: "zone",
+				element: zone,
+				sectionId: zone.dataset.sectionId ?? UNASSIGNED_SECTION_ID,
+			};
+		}
+
+		return null;
 	}
 
 	private clearDropTargets(): void {
@@ -788,6 +1445,7 @@ export class AlternativeExplorerView extends ItemView {
 
 	private finishDrag(): void {
 		this.draggedFolderPath = null;
+		this.draggedSectionId = null;
 		this.clearDropTargets();
 		this.contentEl
 			.querySelectorAll(".is-dragging")
