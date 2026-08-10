@@ -584,3 +584,7 @@
 .alternative-explorer-smart-frontmatter-key {
 	min-width: 7rem;
 }
+
+.alternative-explorer-smart-custom-date {
+	min-width: 8rem;
+}
