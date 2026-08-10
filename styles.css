@@ -312,12 +312,16 @@
 .alternative-explorer-file-row {
 	align-items: flex-start;
 	gap: 6px;
+	/* Override Obsidian's fixed button height so multi-line rows don't overlap. */
+	height: auto;
 	min-height: 0;
 	padding: 6px 4px;
 	color: var(--text-normal);
 	background-color: transparent;
 	border: 1px solid transparent;
 	border-radius: var(--radius-s);
+	white-space: normal;
+	overflow: visible;
 }
 
 .alternative-explorer-folder-row:hover,
@@ -428,8 +432,10 @@
 	display: flex;
 	flex: 1 1 auto;
 	min-width: 0;
+	min-height: min-content;
 	flex-direction: column;
-	gap: 0;
+	align-items: stretch;
+	gap: 1px;
 }
 
 .alternative-explorer-folder-name,
