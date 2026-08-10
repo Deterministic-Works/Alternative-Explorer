@@ -72,7 +72,7 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 - Operators: equals, not equals, contains, not contains, starts with, ends with, exists, not exists; date fields also support before / after / on (`YYYY-MM-DD`).
 - Date fields also support **within** plus relative presets: today, yesterday, last 7/30 days, this/last week, this/last month (or a custom `YYYY-MM-DD` / `N-days-ago`).
 - For **within**, Custom days accepts any last-N-days count (for example 14).
-- **Pinned** rules use is / is not with Pinned or Not pinned (from core Bookmarks file bookmarks).
+- **Pinned** rules use a single state control: is pinned / is not pinned (from core Bookmarks file bookmarks).
 - Empty rules match no notes.
 - Create from the folders header; right-click to edit rules, rename, or delete.
 - Opening a smart folder shows matching vault notes in the notes pane (depth toggle hidden; parent paths shown).

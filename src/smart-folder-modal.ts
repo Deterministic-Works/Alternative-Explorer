@@ -42,9 +42,9 @@ const OPERATOR_OPTIONS: { value: SmartFolderOperator; label: string }[] = [
 	{ value: "within", label: "within" },
 ];
 
-const PINNED_OPERATOR_OPTIONS: { value: SmartFolderOperator; label: string }[] = [
-	{ value: "equals", label: "is" },
-	{ value: "not-equals", label: "is not" },
+const PINNED_STATE_OPTIONS: { value: "true" | "false"; label: string }[] = [
+	{ value: "true", label: "is pinned" },
+	{ value: "false", label: "is not pinned" },
 ];
 
 const CUSTOM_DATE_VALUE = "__custom__";
@@ -62,7 +62,7 @@ function operatorsForField(field: SmartFolderField): SmartFolderOperator[] {
 		return ["within", "on", "before", "after", "exists", "not-exists"];
 	}
 	if (isPinnedField(field)) {
-		return ["equals", "not-equals"];
+		return ["equals"];
 	}
 	return [
 		"equals",
@@ -76,12 +76,13 @@ function operatorsForField(field: SmartFolderField): SmartFolderOperator[] {
 	];
 }
 
-function operatorLabel(field: SmartFolderField, operator: SmartFolderOperator): string {
-	if (isPinnedField(field)) {
-		const pinned = PINNED_OPERATOR_OPTIONS.find((option) => option.value === operator);
-		if (pinned) return pinned.label;
-	}
-	return OPERATOR_OPTIONS.find((option) => option.value === operator)?.label ?? operator;
+function pinnedStateValue(rule: SmartFolderRule): "true" | "false" {
+	return rule.value === "false" ? "false" : "true";
+}
+
+function applyPinnedState(rule: SmartFolderRule, state: "true" | "false"): void {
+	rule.operator = "equals";
+	rule.value = state;
 }
 
 function fieldSelectValue(field: SmartFolderField): string {
@@ -130,7 +131,17 @@ export class SmartFolderModal extends Modal {
 		this.setTitle(heading);
 		this.name = initial?.name ?? "New smart folder";
 		this.match = initial?.match ?? "all";
-		this.rules = (initial?.rules ?? []).map((rule) => ({ ...rule }));
+		this.rules = (initial?.rules ?? []).map((rule) => {
+			const next = { ...rule };
+			if (isPinnedField(next.field)) {
+				if (next.operator === "not-equals") {
+					applyPinnedState(next, next.value === "false" ? "true" : "false");
+				} else {
+					applyPinnedState(next, pinnedStateValue(next));
+				}
+			}
+			return next;
+		});
 		if (this.rules.length === 0) {
 			this.rules.push(createSmartFolderRule());
 		}
@@ -234,7 +245,7 @@ export class SmartFolderModal extends Modal {
 					rule.operator = nextOperators[0] ?? "equals";
 				}
 				if (isPinnedField(rule.field)) {
-					rule.value = rule.value === "false" ? "false" : "true";
+					applyPinnedState(rule, pinnedStateValue(rule));
 				} else if (isDateField(rule.field)) {
 					if (
 						rule.operator !== "exists" &&
@@ -262,52 +273,48 @@ export class SmartFolderModal extends Modal {
 			});
 		}
 
-		setting.addDropdown((dropdown) => {
-			for (const option of OPERATOR_OPTIONS) {
-				if (!allowedOperators.includes(option.value)) continue;
-				dropdown.addOption(option.value, operatorLabel(rule.field, option.value));
-			}
-			dropdown.setValue(rule.operator).onChange((value) => {
-				rule.operator = value as SmartFolderOperator;
-				if (
-					isDateField(rule.field) &&
-					rule.operator !== "exists" &&
-					rule.operator !== "not-exists"
-				) {
-					const keepAbsolute = /^\d{4}-\d{2}-\d{2}$/.test(rule.value);
-					if (!keepAbsolute && !isRelativePreset(rule.value, rule.operator)) {
-						rule.value = defaultDateValue(rule.operator);
-					}
+		if (isPinnedField(rule.field)) {
+			applyPinnedState(rule, pinnedStateValue(rule));
+			setting.addDropdown((dropdown) => {
+				for (const option of PINNED_STATE_OPTIONS) {
+					dropdown.addOption(option.value, option.label);
 				}
-				if (isPinnedField(rule.field) && rule.value !== "true" && rule.value !== "false") {
-					rule.value = "true";
-				}
-				this.renderForm();
+				dropdown.setValue(pinnedStateValue(rule)).onChange((value) => {
+					applyPinnedState(rule, value === "false" ? "false" : "true");
+				});
 			});
-		});
-
-		if (rule.operator !== "exists" && rule.operator !== "not-exists") {
-			if (isPinnedField(rule.field)) {
-				if (rule.value !== "true" && rule.value !== "false") {
-					rule.value = "true";
+		} else {
+			setting.addDropdown((dropdown) => {
+				for (const option of OPERATOR_OPTIONS) {
+					if (!allowedOperators.includes(option.value)) continue;
+					dropdown.addOption(option.value, option.label);
 				}
-				setting.addDropdown((dropdown) => {
-					dropdown
-						.addOption("true", "Pinned")
-						.addOption("false", "Not pinned")
-						.setValue(rule.value)
-						.onChange((value) => {
-							rule.value = value === "false" ? "false" : "true";
+				dropdown.setValue(rule.operator).onChange((value) => {
+					rule.operator = value as SmartFolderOperator;
+					if (
+						isDateField(rule.field) &&
+						rule.operator !== "exists" &&
+						rule.operator !== "not-exists"
+					) {
+						const keepAbsolute = /^\d{4}-\d{2}-\d{2}$/.test(rule.value);
+						if (!keepAbsolute && !isRelativePreset(rule.value, rule.operator)) {
+							rule.value = defaultDateValue(rule.operator);
+						}
+					}
+					this.renderForm();
+				});
+			});
+
+			if (rule.operator !== "exists" && rule.operator !== "not-exists") {
+				if (isDateField(rule.field)) {
+					this.renderDateValueControls(setting, rule);
+				} else {
+					setting.addText((text) => {
+						text.setPlaceholder("Value").setValue(rule.value).onChange((value) => {
+							rule.value = value;
 						});
-				});
-			} else if (isDateField(rule.field)) {
-				this.renderDateValueControls(setting, rule);
-			} else {
-				setting.addText((text) => {
-					text.setPlaceholder("Value").setValue(rule.value).onChange((value) => {
-						rule.value = value;
 					});
-				});
+				}
 			}
 		}
 
