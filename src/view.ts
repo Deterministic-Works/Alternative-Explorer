@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, moment, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import {
 	FolderSortBy,
@@ -6,7 +6,11 @@ import {
 	NoteGroupBy,
 	NoteSortBy,
 	NoteSortDir,
+	SmartFolder,
 	VIEW_TYPE_ALTERNATIVE_EXPLORER,
+	isSmartFolderScope,
+	smartFolderScopeId,
+	toSmartFolderScope,
 } from "./constants";
 import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
@@ -23,6 +27,8 @@ import {
 } from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
 import { SectionNameModal } from "./section-name-modal";
+import { SmartFolderModal } from "./smart-folder-modal";
+import { noteMatchesSmartFolder, type SmartFolderNoteSnapshot } from "./smart-folders";
 
 type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
 
@@ -51,6 +57,7 @@ export class AlternativeExplorerView extends ItemView {
 	private draggedFolderPath: string | null = null;
 	private draggedSectionId: string | null = null;
 	private folderStatCache = new Map<string, { mtime: number; ctime: number }>();
+	private revealFilePath: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, private readonly plugin: AlternativeExplorerPlugin) {
 		super(leaf);
@@ -91,6 +98,8 @@ export class AlternativeExplorerView extends ItemView {
 		} else {
 			this.renderFoldersPane(browser);
 		}
+
+		this.applyRevealHighlight();
 	}
 
 	private registerInteractions(): void {
@@ -124,12 +133,39 @@ export class AlternativeExplorerView extends ItemView {
 				return;
 			}
 
+			const smartFolderControl = element.closest<HTMLButtonElement>(
+				"button[data-open-smart-folder]"
+			);
+			if (smartFolderControl?.dataset.openSmartFolder) {
+				event.preventDefault();
+				void this.openSmartFolder(smartFolderControl.dataset.openSmartFolder);
+				return;
+			}
+
 			const newSectionControl = element.closest<HTMLButtonElement>(
 				"button[data-new-section]"
 			);
 			if (newSectionControl) {
 				event.preventDefault();
 				void this.createSection();
+				return;
+			}
+
+			const newSmartFolderControl = element.closest<HTMLButtonElement>(
+				"button[data-new-smart-folder]"
+			);
+			if (newSmartFolderControl) {
+				event.preventDefault();
+				this.createSmartFolder();
+				return;
+			}
+
+			const revealControl = element.closest<HTMLButtonElement>(
+				"button[data-reveal-current-note]"
+			);
+			if (revealControl) {
+				event.preventDefault();
+				void this.revealCurrentNote();
 				return;
 			}
 
@@ -187,6 +223,15 @@ export class AlternativeExplorerView extends ItemView {
 			if (sectionHeader?.dataset.sectionId) {
 				event.preventDefault();
 				this.showSectionContextMenu(event, sectionHeader.dataset.sectionId);
+				return;
+			}
+
+			const smartFolderRow = target.closest<HTMLElement>(
+				".alternative-explorer-folder-row[data-smart-folder-id]"
+			);
+			if (smartFolderRow?.dataset.smartFolderId) {
+				event.preventDefault();
+				this.showSmartFolderContextMenu(event, smartFolderRow.dataset.smartFolderId);
 				return;
 			}
 
@@ -308,6 +353,7 @@ export class AlternativeExplorerView extends ItemView {
 
 		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
 		this.renderAllNotesRow(list);
+		this.renderSmartFolderRows(list);
 
 		const rootFolders = root.children.filter(
 			(child): child is TFolder => child instanceof TFolder
@@ -355,6 +401,19 @@ export class AlternativeExplorerView extends ItemView {
 			attr: { "aria-label": "Folder controls" },
 		});
 
+		this.renderRevealButton(controls);
+
+		const newSmartFolderButton = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-new-smart-folder": "true",
+				"aria-label": "New smart folder",
+				title: "New smart folder",
+			},
+		});
+		setIcon(newSmartFolderButton, "sparkles");
+
 		const newSectionButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
 			attr: {
@@ -389,6 +448,19 @@ export class AlternativeExplorerView extends ItemView {
 					? "arrow-up-narrow-wide"
 					: "arrow-down-wide-narrow"
 		);
+	}
+
+	private renderRevealButton(controls: HTMLElement): void {
+		const revealButton = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-reveal-current-note": "true",
+				"aria-label": "Reveal current note",
+				title: "Reveal current note",
+			},
+		});
+		setIcon(revealButton, "locate-fixed");
 	}
 
 	private renderFolderSection(
@@ -474,6 +546,40 @@ export class AlternativeExplorerView extends ItemView {
 		});
 		const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
 		setIcon(arrow, "chevron-right");
+	}
+
+	private renderSmartFolderRows(list: HTMLElement): void {
+		for (const smartFolder of this.plugin.settings.smartFolders) {
+			const selected = this.plugin.settings.notesScope === toSmartFolderScope(smartFolder.id);
+			const row = list.createDiv({
+				cls: `alternative-explorer-folder-row is-smart-row${selected ? " is-selected" : ""}`,
+				attr: {
+					"data-smart-folder-id": smartFolder.id,
+				},
+			});
+			row.createSpan({ cls: "alternative-explorer-folder-toggle-spacer" });
+			const button = row.createEl("button", {
+				cls: "alternative-explorer-folder-button",
+				attr: {
+					type: "button",
+					"data-open-smart-folder": smartFolder.id,
+					title: smartFolder.name,
+				},
+			});
+			const icon = button.createSpan({ cls: "alternative-explorer-row-icon" });
+			setIcon(icon, "sparkles");
+			const copy = button.createSpan({ cls: "alternative-explorer-folder-copy" });
+			copy.createSpan({
+				cls: "alternative-explorer-folder-name",
+				text: smartFolder.name,
+			});
+			copy.createSpan({
+				cls: "alternative-explorer-folder-meta",
+				text: this.smartFolderSummary(smartFolder),
+			});
+			const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
+			setIcon(arrow, "chevron-right");
+		}
 	}
 
 	private renderFolderBranch(
@@ -589,12 +695,7 @@ export class AlternativeExplorerView extends ItemView {
 			setIcon(icon, "file-text");
 			empty.createDiv({ text: "No notes here yet" });
 			empty.createEl("p", {
-				text:
-					this.plugin.settings.notesScope === "all"
-						? "Notes in the vault will appear here."
-						: this.plugin.settings.recursive
-							? "This folder and its subfolders have no notes yet."
-							: "Switch to All below to include notes in subfolders.",
+				text: this.emptyNotesMessage(),
 			});
 			return;
 		}
@@ -644,7 +745,7 @@ export class AlternativeExplorerView extends ItemView {
 		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
 		const titleGroup = heading.createDiv({ cls: "alternative-explorer-title-group" });
 		titleGroup.createEl("h1", { text: title });
-		if (this.plugin.settings.notesScope !== "all") {
+		if (this.canToggleNotesDepth()) {
 			this.renderModeToggle(titleGroup);
 		}
 
@@ -656,6 +757,8 @@ export class AlternativeExplorerView extends ItemView {
 			cls: "alternative-explorer-list-controls",
 			attr: { "aria-label": "Sort and group" },
 		});
+
+		this.renderRevealButton(controls);
 
 		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
 		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
@@ -731,7 +834,9 @@ export class AlternativeExplorerView extends ItemView {
 		copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
 		const parent = file.parent;
 		const showLocation =
-			(this.plugin.settings.notesScope === "all" || this.plugin.settings.recursive) &&
+			(this.plugin.settings.notesScope === "all" ||
+				isSmartFolderScope(this.plugin.settings.notesScope) ||
+				this.plugin.settings.recursive) &&
 			parent !== null &&
 			!parent.isRoot() &&
 			parent.path !== this.plugin.settings.notesScope;
@@ -739,7 +844,8 @@ export class AlternativeExplorerView extends ItemView {
 			copy.createSpan({
 				cls: "alternative-explorer-file-location",
 				text:
-					this.plugin.settings.notesScope === "all"
+					this.plugin.settings.notesScope === "all" ||
+					isSmartFolderScope(this.plugin.settings.notesScope)
 						? parent.path
 						: this.relativeParentPath(this.plugin.settings.notesScope, file),
 			});
@@ -1070,6 +1176,147 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
+	private async openSmartFolder(id: string): Promise<void> {
+		const smartFolder = this.plugin.settings.smartFolders.find((folder) => folder.id === id);
+		if (!smartFolder) return;
+		this.plugin.settings.pane = "notes";
+		this.plugin.settings.notesScope = toSmartFolderScope(smartFolder.id);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private createSmartFolder(): void {
+		new SmartFolderModal(this.app, "New smart folder", null, "Create", (folder) => {
+			if (!folder) return;
+			void this.finishCreateSmartFolder(folder);
+		}).open();
+	}
+
+	private async finishCreateSmartFolder(folder: SmartFolder): Promise<void> {
+		this.plugin.settings.smartFolders = [...this.plugin.settings.smartFolders, folder];
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private editSmartFolder(id: string): void {
+		const existing = this.plugin.settings.smartFolders.find((folder) => folder.id === id);
+		if (!existing) return;
+		new SmartFolderModal(this.app, "Edit smart folder", existing, "Save", (folder) => {
+			if (!folder) return;
+			void this.finishEditSmartFolder(folder);
+		}).open();
+	}
+
+	private async finishEditSmartFolder(folder: SmartFolder): Promise<void> {
+		this.plugin.settings.smartFolders = this.plugin.settings.smartFolders.map((entry) =>
+			entry.id === folder.id ? folder : entry
+		);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private renameSmartFolder(id: string, currentName: string): void {
+		new SectionNameModal(this.app, "Rename smart folder", currentName, "Save", (name) => {
+			if (name === null) return;
+			void this.finishRenameSmartFolder(id, name);
+		}).open();
+	}
+
+	private async finishRenameSmartFolder(id: string, name: string): Promise<void> {
+		this.plugin.settings.smartFolders = this.plugin.settings.smartFolders.map((folder) =>
+			folder.id === id ? { ...folder, name: name.trim() || "Untitled" } : folder
+		);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async deleteSmartFolder(id: string): Promise<void> {
+		this.plugin.settings.smartFolders = this.plugin.settings.smartFolders.filter(
+			(folder) => folder.id !== id
+		);
+		if (this.plugin.settings.notesScope === toSmartFolderScope(id)) {
+			this.plugin.settings.notesScope = "all";
+			this.plugin.settings.pane = "folders";
+		}
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private showSmartFolderContextMenu(event: MouseEvent, id: string): void {
+		const smartFolder = this.plugin.settings.smartFolders.find((folder) => folder.id === id);
+		if (!smartFolder) return;
+
+		const menu = Menu.forEvent(event);
+		menu.addItem((item) => {
+			item
+				.setTitle("Edit rules")
+				.setIcon("sliders-horizontal")
+				.onClick(() => {
+					this.editSmartFolder(id);
+				});
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("Rename")
+				.setIcon("pencil")
+				.onClick(() => {
+					this.renameSmartFolder(id, smartFolder.name);
+				});
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("Delete smart folder")
+				.setIcon("trash")
+				.onClick(() => {
+					void this.deleteSmartFolder(id);
+				});
+		});
+	}
+
+	private async revealCurrentNote(): Promise<void> {
+		const file = this.app.workspace.getActiveFile();
+		if (!(file instanceof TFile)) {
+			new Notice("No active note to reveal.");
+			return;
+		}
+
+		const parent = file.parent;
+		if (!parent || parent.isRoot()) {
+			this.plugin.settings.notesScope = "all";
+		} else {
+			this.plugin.settings.notesScope = parent.path;
+		}
+		this.plugin.settings.pane = "notes";
+		this.plugin.settings.recursive = false;
+		this.revealFilePath = file.path;
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private applyRevealHighlight(): void {
+		const path = this.revealFilePath;
+		if (!path) return;
+		this.revealFilePath = null;
+
+		const escaped =
+			typeof CSS !== "undefined" && typeof CSS.escape === "function"
+				? CSS.escape(path)
+				: path.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+		const row = this.contentEl.querySelector<HTMLElement>(
+			`button.alternative-explorer-file-row[data-file-path="${escaped}"]`
+		);
+		if (!row) {
+			new Notice("Current note is not in this list.");
+			return;
+		}
+
+		row.scrollIntoView({ block: "nearest" });
+		row.addClass("is-revealed");
+		window.setTimeout(() => {
+			row.removeClass("is-revealed");
+		}, 1600);
+	}
+
 	private async backToFolders(): Promise<void> {
 		this.plugin.settings.pane = "folders";
 		await this.plugin.saveSettings();
@@ -1302,12 +1549,40 @@ export class AlternativeExplorerView extends ItemView {
 			return this.app.vault.getFiles();
 		}
 
+		if (isSmartFolderScope(scope)) {
+			const id = smartFolderScopeId(scope);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			if (!smartFolder) return [];
+			return this.app.vault
+				.getFiles()
+				.filter((file) => noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file), smartFolder));
+		}
+
 		const folder = this.app.vault.getAbstractFileByPath(scope);
 		if (!(folder instanceof TFolder)) {
 			return [];
 		}
 
 		return this.getFiles(folder, this.plugin.settings.recursive);
+	}
+
+	private toSmartFolderNoteSnapshot(file: TFile): SmartFolderNoteSnapshot {
+		const cache = this.app.metadataCache.getFileCache(file);
+		const tags = cache ? getAllTags(cache) ?? [] : [];
+		const frontmatter =
+			cache?.frontmatter && typeof cache.frontmatter === "object"
+				? (cache.frontmatter as Record<string, unknown>)
+				: {};
+		return {
+			path: file.path,
+			name: file.basename,
+			ctime: file.stat.ctime,
+			mtime: file.stat.mtime,
+			tags,
+			frontmatter,
+		};
 	}
 
 	private getFiles(folder: TFolder, recursive: boolean): TFile[] {
@@ -1329,11 +1604,36 @@ export class AlternativeExplorerView extends ItemView {
 		if (this.plugin.settings.notesScope === "all") {
 			return "All notes";
 		}
+		const smartId = smartFolderScopeId(this.plugin.settings.notesScope);
+		if (smartId) {
+			const smartFolder = this.plugin.settings.smartFolders.find(
+				(folder) => folder.id === smartId
+			);
+			return smartFolder?.name ?? "Smart folder";
+		}
 		const folder = this.app.vault.getAbstractFileByPath(this.plugin.settings.notesScope);
 		if (folder instanceof TFolder) {
 			return this.folderName(folder);
 		}
 		return "Notes";
+	}
+
+	private canToggleNotesDepth(): boolean {
+		const scope = this.plugin.settings.notesScope;
+		return scope !== "all" && !isSmartFolderScope(scope);
+	}
+
+	private emptyNotesMessage(): string {
+		const scope = this.plugin.settings.notesScope;
+		if (scope === "all") {
+			return "Notes in the vault will appear here.";
+		}
+		if (isSmartFolderScope(scope)) {
+			return "No notes match this smart folder.";
+		}
+		return this.plugin.settings.recursive
+			? "This folder and its subfolders have no notes yet."
+			: "Switch to All below to include notes in subfolders.";
 	}
 
 	private folderName(folder: TFolder): string {
@@ -1351,6 +1651,14 @@ export class AlternativeExplorerView extends ItemView {
 
 	private allNotesSummary(): string {
 		const count = this.app.vault.getFiles().length;
+		return `${count} ${count === 1 ? "note" : "notes"}`;
+	}
+
+	private smartFolderSummary(smartFolder: SmartFolder): string {
+		const count = this.app.vault
+			.getFiles()
+			.filter((file) => noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file), smartFolder))
+			.length;
 		return `${count} ${count === 1 ? "note" : "notes"}`;
 	}
 

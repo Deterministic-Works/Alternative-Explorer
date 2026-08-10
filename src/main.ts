@@ -8,11 +8,15 @@ import {
 	NoteGroupBy,
 	NoteSortBy,
 	NoteSortDir,
+	SmartFolder,
 	VIEW_TYPE_ALTERNATIVE_EXPLORER,
 	createDefaultSettings,
+	isSmartFolderScope,
+	smartFolderScopeId,
 } from "./constants";
 import { replacePathPrefix } from "./folder-order";
 import { pruneFolderSections, remapFolderSections } from "./folder-sections";
+import { parseSmartFolder } from "./smart-folders";
 import { AlternativeExplorerView } from "./view";
 
 export default class AlternativeExplorerPlugin extends Plugin {
@@ -43,6 +47,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("delete", () => {
 				let dirty = this.ensureCurrentFolderExists();
+				if (this.ensureNotesScopeExists()) dirty = true;
 				const beforeExpanded = this.settings.expandedFolders.length;
 				this.pruneExpandedFolders();
 				if (this.settings.expandedFolders.length !== beforeExpanded) dirty = true;
@@ -89,6 +94,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			collapsedSectionIds: this.parseExpandedFolders(saved?.collapsedSectionIds),
 			folderSortBy: this.parseFolderSortBy(saved?.folderSortBy),
 			folderSortDir: this.parseFolderSortDir(saved?.folderSortDir),
+			smartFolders: this.parseSmartFolders(saved?.smartFolders),
 			sortBy: this.parseSortBy(saved?.sortBy),
 			sortDir: this.parseSortDir(saved?.sortDir),
 			groupBy: this.parseGroupBy(saved?.groupBy),
@@ -96,6 +102,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 				typeof saved?.groupPinned === "boolean" ? saved.groupPinned : defaults.groupPinned,
 		};
 		this.ensureCurrentFolderExists();
+		this.ensureNotesScopeExists();
 		this.pruneExpandedFolders();
 		this.pruneSectionMembership();
 		this.pruneCollapsedSections();
@@ -141,6 +148,27 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		const folder = this.app.vault.getAbstractFileByPath(this.settings.currentFolder);
 		if (!(folder instanceof TFolder)) {
 			this.settings.currentFolder = this.app.vault.getRoot().path;
+			return true;
+		}
+		return false;
+	}
+
+	private ensureNotesScopeExists(): boolean {
+		const scope = this.settings.notesScope;
+		if (scope === "all") return false;
+		if (isSmartFolderScope(scope)) {
+			const id = smartFolderScopeId(scope);
+			const exists =
+				id !== null && this.settings.smartFolders.some((folder) => folder.id === id);
+			if (!exists) {
+				this.settings.notesScope = "all";
+				return true;
+			}
+			return false;
+		}
+		const folder = this.app.vault.getAbstractFileByPath(scope);
+		if (!(folder instanceof TFolder)) {
+			this.settings.notesScope = "all";
 			return true;
 		}
 		return false;
@@ -270,5 +298,18 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			});
 		}
 		return sections;
+	}
+
+	private parseSmartFolders(value: unknown): SmartFolder[] {
+		if (!Array.isArray(value)) return [];
+		const folders: SmartFolder[] = [];
+		const seen = new Set<string>();
+		for (const entry of value) {
+			const folder = parseSmartFolder(entry);
+			if (!folder || seen.has(folder.id)) continue;
+			seen.add(folder.id);
+			folders.push(folder);
+		}
+		return folders;
 	}
 }

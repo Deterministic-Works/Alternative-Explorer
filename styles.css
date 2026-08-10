@@ -563,3 +563,24 @@
 	margin: 4px 0 0;
 	font-size: var(--font-ui-smaller);
 }
+
+.alternative-explorer-file-row.is-revealed {
+	background-color: var(--nav-item-background-active);
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+	transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.alternative-explorer-smart-rules-heading {
+	margin: 12px 0 8px;
+	font-size: var(--font-ui-small);
+}
+
+.alternative-explorer-smart-rule .setting-item-control {
+	flex-wrap: wrap;
+	justify-content: flex-start;
+	gap: 6px;
+}
+
+.alternative-explorer-smart-frontmatter-key {
+	min-width: 7rem;
+}
