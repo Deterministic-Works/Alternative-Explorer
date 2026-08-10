@@ -48,6 +48,8 @@ Do not edit the generated `main.js` directly.
 | `src/bookmarks.ts` | Core Bookmarks plugin file-path reader |
 | `src/folder-order.ts` | Pure folder-order and path-remapping helpers |
 | `src/folder-sections.ts` | Pure folder-section partition, sort, and membership helpers |
+| `src/smart-folders.ts` | Pure smart-folder rule matching helpers |
+| `src/smart-folder-modal.ts` | Create/edit UI for smart folders |
 | `styles.css` | Narrow sidebar layout and Obsidian-native presentation |
 | `manifest.json` | Plugin identity and Obsidian compatibility |
 | `package.json` | Development dependencies and verified commands |
