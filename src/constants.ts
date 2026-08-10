@@ -53,6 +53,8 @@ export interface SmartFolderRule {
 export interface SmartFolder {
 	id: string;
 	name: string;
+	/** Vault folder path when nested; null when shown at the vault root. */
+	parentPath: string | null;
 	match: SmartFolderMatch;
 	rules: SmartFolderRule[];
 }

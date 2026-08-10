@@ -370,6 +370,12 @@
 	bottom: -1px;
 }
 
+.alternative-explorer-folder-row.is-drop-into {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+	background-color: var(--nav-item-background-hover, var(--background-modifier-hover));
+}
+
 .alternative-explorer-folder-toggle,
 .alternative-explorer-folder-toggle-spacer {
 	display: inline-flex;
