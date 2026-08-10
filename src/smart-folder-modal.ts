@@ -92,6 +92,9 @@ export class SmartFolderModal extends Modal {
 	private name: string;
 	private match: SmartFolderMatch;
 	private rules: SmartFolderRule[];
+	private customDateRuleIds = new Set<string>();
+	private focusCustomDateRuleId: string | null = null;
+	private didFocusName = false;
 
 	constructor(
 		app: App,
@@ -107,6 +110,11 @@ export class SmartFolderModal extends Modal {
 		this.rules = (initial?.rules ?? []).map((rule) => ({ ...rule }));
 		if (this.rules.length === 0) {
 			this.rules.push(createSmartFolderRule());
+		}
+		for (const rule of this.rules) {
+			if (isDateField(rule.field) && /^\d{4}-\d{2}-\d{2}$/.test(rule.value)) {
+				this.customDateRuleIds.add(rule.id);
+			}
 		}
 	}
 
@@ -132,10 +140,13 @@ export class SmartFolderModal extends Modal {
 					this.submit();
 				}
 			});
-			window.setTimeout(() => {
-				text.inputEl.focus();
-				text.inputEl.select();
-			}, 0);
+			if (!this.didFocusName) {
+				this.didFocusName = true;
+				window.setTimeout(() => {
+					text.inputEl.focus();
+					text.inputEl.select();
+				}, 0);
+			}
 		});
 
 		new Setting(contentEl).setName("Match").addDropdown((dropdown) => {
@@ -194,11 +205,14 @@ export class SmartFolderModal extends Modal {
 					if (
 						rule.operator !== "exists" &&
 						rule.operator !== "not-exists" &&
+						!this.customDateRuleIds.has(rule.id) &&
 						!isRelativePreset(rule.value, rule.operator) &&
 						!/^\d{4}-\d{2}-\d{2}$/.test(rule.value)
 					) {
 						rule.value = defaultDateValue(rule.operator);
 					}
+				} else {
+					this.customDateRuleIds.delete(rule.id);
 				}
 				this.renderForm();
 			});
@@ -261,14 +275,20 @@ export class SmartFolderModal extends Modal {
 	}
 
 	private renderDateValueControls(setting: Setting, rule: SmartFolderRule): void {
-		if (!rule.value) {
-			rule.value = defaultDateValue(rule.operator);
-		}
 		const presets =
 			rule.operator === "within"
 				? (RELATIVE_DATE_RANGE_VALUES as readonly string[])
 				: (RELATIVE_DATE_DAY_VALUES as readonly string[]);
-		const usingPreset = presets.includes(rule.value);
+		const usingCustom =
+			this.customDateRuleIds.has(rule.id) ||
+			(rule.value.length > 0 && !presets.includes(rule.value));
+
+		if (!usingCustom && !rule.value) {
+			rule.value = defaultDateValue(rule.operator);
+		}
+		if (usingCustom) {
+			this.customDateRuleIds.add(rule.id);
+		}
 
 		setting.addDropdown((dropdown) => {
 			if (rule.operator === "within") {
@@ -281,20 +301,24 @@ export class SmartFolderModal extends Modal {
 				}
 			}
 			dropdown.addOption(CUSTOM_DATE_VALUE, "Custom date…");
-			dropdown.setValue(usingPreset ? rule.value : CUSTOM_DATE_VALUE);
+			dropdown.setValue(usingCustom ? CUSTOM_DATE_VALUE : rule.value);
 			dropdown.onChange((value) => {
 				if (value === CUSTOM_DATE_VALUE) {
-					if (presets.includes(rule.value) || rule.value.length === 0) {
+					this.customDateRuleIds.add(rule.id);
+					this.focusCustomDateRuleId = rule.id;
+					if (presets.includes(rule.value)) {
 						rule.value = "";
 					}
 				} else {
+					this.customDateRuleIds.delete(rule.id);
+					this.focusCustomDateRuleId = null;
 					rule.value = value;
 				}
 				this.renderForm();
 			});
 		});
 
-		if (!usingPreset) {
+		if (usingCustom) {
 			setting.addText((text) => {
 				text
 					.setPlaceholder("YYYY-MM-DD")
@@ -302,17 +326,40 @@ export class SmartFolderModal extends Modal {
 					.onChange((value) => {
 						rule.value = value.trim();
 					});
+				text.inputEl.addClass("alternative-explorer-smart-custom-date");
+				text.inputEl.addEventListener("keydown", (event) => {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						this.submit();
+					}
+				});
+				if (this.focusCustomDateRuleId === rule.id) {
+					this.focusCustomDateRuleId = null;
+					window.setTimeout(() => {
+						text.inputEl.focus();
+						text.inputEl.select();
+					}, 0);
+				}
 			});
 		}
 	}
 
 	private submit(): void {
 		const normalizedRules = this.rules.map((rule) => {
+			let value = rule.value.trim();
+			if (isDateField(rule.field) && this.customDateRuleIds.has(rule.id)) {
+				// Keep typed custom dates; blank custom values stay blank (match nothing).
+				value = value === CUSTOM_DATE_VALUE ? "" : value;
+			}
 			if (rule.field.startsWith("frontmatter:")) {
 				const key = rule.field.slice("frontmatter:".length).trim() || "property";
-				return { ...rule, field: `frontmatter:${key}` as SmartFolderField, value: rule.value };
+				return {
+					...rule,
+					field: `frontmatter:${key}` as SmartFolderField,
+					value,
+				};
 			}
-			return { ...rule, value: rule.value };
+			return { ...rule, value };
 		});
 
 		const folder = createSmartFolder(this.name, {
