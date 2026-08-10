@@ -29,9 +29,10 @@ const OPERATORS = new Set<SmartFolderOperator>([
 	"before",
 	"after",
 	"on",
+	"within",
 ]);
 
-const DATE_OPERATORS = new Set<SmartFolderOperator>(["before", "after", "on"]);
+const DATE_OPERATORS = new Set<SmartFolderOperator>(["before", "after", "on", "within"]);
 const STRING_OPERATORS = new Set<SmartFolderOperator>([
 	"equals",
 	"not-equals",
@@ -40,6 +41,45 @@ const STRING_OPERATORS = new Set<SmartFolderOperator>([
 	"starts-with",
 	"ends-with",
 ]);
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export const RELATIVE_DATE_DAY_VALUES = ["today", "yesterday"] as const;
+
+export const RELATIVE_DATE_RANGE_VALUES = [
+	"today",
+	"yesterday",
+	"last-7-days",
+	"last-30-days",
+	"this-week",
+	"last-week",
+	"this-month",
+	"last-month",
+] as const;
+
+export type RelativeDateDayValue = (typeof RELATIVE_DATE_DAY_VALUES)[number];
+export type RelativeDateRangeValue = (typeof RELATIVE_DATE_RANGE_VALUES)[number];
+
+export const RELATIVE_DATE_DAY_LABELS: Record<RelativeDateDayValue, string> = {
+	today: "Today",
+	yesterday: "Yesterday",
+};
+
+export const RELATIVE_DATE_RANGE_LABELS: Record<RelativeDateRangeValue, string> = {
+	today: "Today",
+	yesterday: "Yesterday",
+	"last-7-days": "Last 7 days",
+	"last-30-days": "Last 30 days",
+	"this-week": "This week",
+	"last-week": "Last week",
+	"this-month": "This month",
+	"last-month": "Last month",
+};
+
+interface DateBound {
+	start: number;
+	end: number;
+}
 
 export function createSmartFolderId(): string {
 	if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -131,23 +171,29 @@ export function parseSmartFolderRule(value: unknown): SmartFolderRule | null {
 
 export function noteMatchesSmartFolder(
 	note: SmartFolderNoteSnapshot,
-	folder: SmartFolder
+	folder: SmartFolder,
+	now: Date = new Date()
 ): boolean {
 	if (folder.rules.length === 0) return false;
 	if (folder.match === "any") {
-		return folder.rules.some((rule) => noteMatchesRule(note, rule));
+		return folder.rules.some((rule) => noteMatchesRule(note, rule, now));
 	}
-	return folder.rules.every((rule) => noteMatchesRule(note, rule));
+	return folder.rules.every((rule) => noteMatchesRule(note, rule, now));
 }
 
 export function filterNotesBySmartFolder<T extends SmartFolderNoteSnapshot>(
 	notes: readonly T[],
-	folder: SmartFolder
+	folder: SmartFolder,
+	now: Date = new Date()
 ): T[] {
-	return notes.filter((note) => noteMatchesSmartFolder(note, folder));
+	return notes.filter((note) => noteMatchesSmartFolder(note, folder, now));
 }
 
-export function noteMatchesRule(note: SmartFolderNoteSnapshot, rule: SmartFolderRule): boolean {
+export function noteMatchesRule(
+	note: SmartFolderNoteSnapshot,
+	rule: SmartFolderRule,
+	now: Date = new Date()
+): boolean {
 	const fieldKind = fieldKindOf(rule.field);
 
 	if (rule.operator === "exists" || rule.operator === "not-exists") {
@@ -157,7 +203,7 @@ export function noteMatchesRule(note: SmartFolderNoteSnapshot, rule: SmartFolder
 
 	if (fieldKind === "date") {
 		if (!DATE_OPERATORS.has(rule.operator)) return false;
-		return matchDate(noteTimestamp(note, rule.field), rule.operator, rule.value);
+		return matchDate(noteTimestamp(note, rule.field), rule.operator, rule.value, now);
 	}
 
 	if (!STRING_OPERATORS.has(rule.operator)) return false;
@@ -279,15 +325,20 @@ function endsWithIgnoreCase(value: string, needle: string): boolean {
 function matchDate(
 	timestamp: number,
 	operator: SmartFolderOperator,
-	rawValue: string
+	rawValue: string,
+	now: Date
 ): boolean {
 	if (!Number.isFinite(timestamp)) return false;
-	const target = parseDayBound(rawValue);
+	const target = resolveDateBound(rawValue, now);
 	if (!target) return false;
+
+	if (operator === "within") {
+		return timestamp >= target.start && timestamp < target.end;
+	}
 
 	const noteDay = startOfLocalDay(timestamp);
 	if (operator === "on") {
-		return noteDay === target.start;
+		return noteDay === target.start && target.end - target.start === DAY_MS;
 	}
 	if (operator === "before") {
 		return timestamp < target.start;
@@ -298,9 +349,51 @@ function matchDate(
 	return false;
 }
 
-function parseDayBound(rawValue: string): { start: number; end: number } | null {
+export function resolveDateBound(rawValue: string, now: Date = new Date()): DateBound | null {
 	const trimmed = rawValue.trim();
 	if (!trimmed) return null;
+
+	const normalized = trimmed.toLowerCase().replace(/_/g, "-").replace(/\s+/g, "-");
+	const todayStart = startOfLocalDay(now.getTime());
+	const tomorrowStart = todayStart + DAY_MS;
+
+	if (normalized === "today") {
+		return { start: todayStart, end: tomorrowStart };
+	}
+	if (normalized === "yesterday") {
+		return { start: todayStart - DAY_MS, end: todayStart };
+	}
+	if (normalized === "last-7-days" || normalized === "previous-7-days") {
+		return { start: tomorrowStart - 7 * DAY_MS, end: tomorrowStart };
+	}
+	if (normalized === "last-30-days" || normalized === "previous-30-days") {
+		return { start: tomorrowStart - 30 * DAY_MS, end: tomorrowStart };
+	}
+	if (normalized === "this-week") {
+		const weekStart = startOfWeek(todayStart);
+		return { start: weekStart, end: weekStart + 7 * DAY_MS };
+	}
+	if (normalized === "last-week") {
+		const weekStart = startOfWeek(todayStart);
+		return { start: weekStart - 7 * DAY_MS, end: weekStart };
+	}
+	if (normalized === "this-month") {
+		const monthStart = startOfMonth(todayStart);
+		return { start: monthStart, end: addMonths(monthStart, 1) };
+	}
+	if (normalized === "last-month") {
+		const monthStart = startOfMonth(todayStart);
+		const previousMonthStart = addMonths(monthStart, -1);
+		return { start: previousMonthStart, end: monthStart };
+	}
+
+	const daysAgo = /^(\d+)-days?-ago$/.exec(normalized);
+	if (daysAgo) {
+		const days = Number(daysAgo[1]);
+		if (!Number.isFinite(days) || days < 0) return null;
+		const start = todayStart - days * DAY_MS;
+		return { start, end: start + DAY_MS };
+	}
 
 	const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
 	if (ymd) {
@@ -316,11 +409,27 @@ function parseDayBound(rawValue: string): { start: number; end: number } | null 
 	const parsed = Date.parse(trimmed);
 	if (!Number.isFinite(parsed)) return null;
 	const start = startOfLocalDay(parsed);
-	const end = start + 24 * 60 * 60 * 1000;
-	return { start, end };
+	return { start, end: start + DAY_MS };
 }
 
 function startOfLocalDay(timestamp: number): number {
 	const date = new Date(timestamp);
 	return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function startOfWeek(dayStart: number): number {
+	const date = new Date(dayStart);
+	const day = date.getDay(); // 0 Sunday … 6 Saturday
+	const daysFromMonday = (day + 6) % 7;
+	return dayStart - daysFromMonday * DAY_MS;
+}
+
+function startOfMonth(dayStart: number): number {
+	const date = new Date(dayStart);
+	return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+}
+
+function addMonths(monthStart: number, count: number): number {
+	const date = new Date(monthStart);
+	return new Date(date.getFullYear(), date.getMonth() + count, 1).getTime();
 }

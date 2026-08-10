@@ -196,6 +196,86 @@ describe("noteMatchesRule", () => {
 			)
 		).toBe(false);
 	});
+
+	it("matches relative date filters", () => {
+		const now = new Date(2026, 2, 11, 15, 0, 0); // Wednesday Mar 11, 2026
+		const todayNote = note({ mtime: new Date(2026, 2, 11, 9, 0, 0).getTime() });
+		const yesterdayNote = note({ mtime: new Date(2026, 2, 10, 9, 0, 0).getTime() });
+		const sixDaysAgo = note({ mtime: new Date(2026, 2, 5, 9, 0, 0).getTime() });
+		const eightDaysAgo = note({ mtime: new Date(2026, 2, 3, 9, 0, 0).getTime() });
+		const lastMonthNote = note({ mtime: new Date(2026, 1, 20, 9, 0, 0).getTime() });
+
+		expect(
+			noteMatchesRule(
+				todayNote,
+				createSmartFolderRule({ field: "mtime", operator: "on", value: "today" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				yesterdayNote,
+				createSmartFolderRule({ field: "mtime", operator: "on", value: "yesterday" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				todayNote,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-7-days" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				sixDaysAgo,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-7-days" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				eightDaysAgo,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-7-days" }),
+				now
+			)
+		).toBe(false);
+		expect(
+			noteMatchesRule(
+				todayNote,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "this-week" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				lastMonthNote,
+				createSmartFolderRule({ field: "mtime", operator: "within", value: "last-month" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				todayNote,
+				createSmartFolderRule({ field: "mtime", operator: "before", value: "today" }),
+				now
+			)
+		).toBe(false);
+		expect(
+			noteMatchesRule(
+				yesterdayNote,
+				createSmartFolderRule({ field: "mtime", operator: "before", value: "today" }),
+				now
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				eightDaysAgo,
+				createSmartFolderRule({ field: "mtime", operator: "on", value: "8-days-ago" }),
+				now
+			)
+		).toBe(true);
+	});
 });
 
 describe("noteMatchesSmartFolder", () => {

@@ -34,7 +34,8 @@ export type SmartFolderOperator =
 	| "ends-with"
 	| "before"
 	| "after"
-	| "on";
+	| "on"
+	| "within";
 
 export interface SmartFolderRule {
 	id: string;

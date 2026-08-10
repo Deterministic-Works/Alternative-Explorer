@@ -6,7 +6,14 @@ import type {
 	SmartFolderOperator,
 	SmartFolderRule,
 } from "./constants";
-import { createSmartFolder, createSmartFolderRule } from "./smart-folders";
+import {
+	RELATIVE_DATE_DAY_LABELS,
+	RELATIVE_DATE_DAY_VALUES,
+	RELATIVE_DATE_RANGE_LABELS,
+	RELATIVE_DATE_RANGE_VALUES,
+	createSmartFolder,
+	createSmartFolderRule,
+} from "./smart-folders";
 
 const FIELD_OPTIONS: { value: string; label: string }[] = [
 	{ value: "tags", label: "Tags" },
@@ -29,11 +36,18 @@ const OPERATOR_OPTIONS: { value: SmartFolderOperator; label: string }[] = [
 	{ value: "before", label: "before" },
 	{ value: "after", label: "after" },
 	{ value: "on", label: "on" },
+	{ value: "within", label: "within" },
 ];
 
+const CUSTOM_DATE_VALUE = "__custom__";
+
+function isDateField(field: SmartFolderField): boolean {
+	return field === "ctime" || field === "mtime";
+}
+
 function operatorsForField(field: SmartFolderField): SmartFolderOperator[] {
-	if (field === "ctime" || field === "mtime") {
-		return ["before", "after", "on", "exists", "not-exists"];
+	if (isDateField(field)) {
+		return ["within", "on", "before", "after", "exists", "not-exists"];
 	}
 	return [
 		"equals",
@@ -61,6 +75,17 @@ function toField(selectValue: string, frontmatterKey: string): SmartFolderField 
 		return `frontmatter:${key}`;
 	}
 	return selectValue as SmartFolderField;
+}
+
+function isRelativePreset(value: string, operator: SmartFolderOperator): boolean {
+	if (operator === "within") {
+		return (RELATIVE_DATE_RANGE_VALUES as readonly string[]).includes(value);
+	}
+	return (RELATIVE_DATE_DAY_VALUES as readonly string[]).includes(value);
+}
+
+function defaultDateValue(operator: SmartFolderOperator): string {
+	return operator === "within" ? "last-7-days" : "today";
 }
 
 export class SmartFolderModal extends Modal {
@@ -165,6 +190,16 @@ export class SmartFolderModal extends Modal {
 				if (!nextOperators.includes(rule.operator)) {
 					rule.operator = nextOperators[0] ?? "equals";
 				}
+				if (isDateField(rule.field)) {
+					if (
+						rule.operator !== "exists" &&
+						rule.operator !== "not-exists" &&
+						!isRelativePreset(rule.value, rule.operator) &&
+						!/^\d{4}-\d{2}-\d{2}$/.test(rule.value)
+					) {
+						rule.value = defaultDateValue(rule.operator);
+					}
+				}
 				this.renderForm();
 			});
 		});
@@ -186,21 +221,30 @@ export class SmartFolderModal extends Modal {
 			}
 			dropdown.setValue(rule.operator).onChange((value) => {
 				rule.operator = value as SmartFolderOperator;
+				if (
+					isDateField(rule.field) &&
+					rule.operator !== "exists" &&
+					rule.operator !== "not-exists"
+				) {
+					const keepAbsolute = /^\d{4}-\d{2}-\d{2}$/.test(rule.value);
+					if (!keepAbsolute && !isRelativePreset(rule.value, rule.operator)) {
+						rule.value = defaultDateValue(rule.operator);
+					}
+				}
 				this.renderForm();
 			});
 		});
 
 		if (rule.operator !== "exists" && rule.operator !== "not-exists") {
-			setting.addText((text) => {
-				text
-					.setPlaceholder(
-						rule.field === "ctime" || rule.field === "mtime" ? "YYYY-MM-DD" : "Value"
-					)
-					.setValue(rule.value)
-					.onChange((value) => {
+			if (isDateField(rule.field)) {
+				this.renderDateValueControls(setting, rule);
+			} else {
+				setting.addText((text) => {
+					text.setPlaceholder("Value").setValue(rule.value).onChange((value) => {
 						rule.value = value;
 					});
-			});
+				});
+			}
 		}
 
 		setting.addExtraButton((button) => {
@@ -214,6 +258,52 @@ export class SmartFolderModal extends Modal {
 					this.renderForm();
 				});
 		});
+	}
+
+	private renderDateValueControls(setting: Setting, rule: SmartFolderRule): void {
+		if (!rule.value) {
+			rule.value = defaultDateValue(rule.operator);
+		}
+		const presets =
+			rule.operator === "within"
+				? (RELATIVE_DATE_RANGE_VALUES as readonly string[])
+				: (RELATIVE_DATE_DAY_VALUES as readonly string[]);
+		const usingPreset = presets.includes(rule.value);
+
+		setting.addDropdown((dropdown) => {
+			if (rule.operator === "within") {
+				for (const value of RELATIVE_DATE_RANGE_VALUES) {
+					dropdown.addOption(value, RELATIVE_DATE_RANGE_LABELS[value]);
+				}
+			} else {
+				for (const value of RELATIVE_DATE_DAY_VALUES) {
+					dropdown.addOption(value, RELATIVE_DATE_DAY_LABELS[value]);
+				}
+			}
+			dropdown.addOption(CUSTOM_DATE_VALUE, "Custom date…");
+			dropdown.setValue(usingPreset ? rule.value : CUSTOM_DATE_VALUE);
+			dropdown.onChange((value) => {
+				if (value === CUSTOM_DATE_VALUE) {
+					if (presets.includes(rule.value) || rule.value.length === 0) {
+						rule.value = "";
+					}
+				} else {
+					rule.value = value;
+				}
+				this.renderForm();
+			});
+		});
+
+		if (!usingPreset) {
+			setting.addText((text) => {
+				text
+					.setPlaceholder("YYYY-MM-DD")
+					.setValue(/^\d{4}-\d{2}-\d{2}$/.test(rule.value) ? rule.value : "")
+					.onChange((value) => {
+						rule.value = value.trim();
+					});
+			});
+		}
 	}
 
 	private submit(): void {
