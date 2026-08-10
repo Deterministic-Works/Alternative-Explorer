@@ -18,6 +18,7 @@ function note(partial: Partial<SmartFolderNoteSnapshot> = {}): SmartFolderNoteSn
 		mtime: partial.mtime ?? Date.parse("2026-02-15T12:00:00"),
 		tags: partial.tags ?? [],
 		frontmatter: partial.frontmatter ?? {},
+		pinned: partial.pinned ?? false,
 	};
 }
 
@@ -296,6 +297,48 @@ describe("noteMatchesRule", () => {
 				now
 			)
 		).toBe(false);
+	});
+
+	it("matches pinned and not pinned notes", () => {
+		const pinnedNote = note({ path: "pinned.md", pinned: true });
+		const plainNote = note({ path: "plain.md", pinned: false });
+
+		expect(
+			noteMatchesRule(
+				pinnedNote,
+				createSmartFolderRule({ field: "pinned", operator: "equals", value: "true" })
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				plainNote,
+				createSmartFolderRule({ field: "pinned", operator: "equals", value: "true" })
+			)
+		).toBe(false);
+		expect(
+			noteMatchesRule(
+				plainNote,
+				createSmartFolderRule({ field: "pinned", operator: "equals", value: "false" })
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				pinnedNote,
+				createSmartFolderRule({ field: "pinned", operator: "not-equals", value: "true" })
+			)
+		).toBe(false);
+		expect(
+			noteMatchesRule(
+				pinnedNote,
+				createSmartFolderRule({ field: "pinned", operator: "equals", value: "yes" })
+			)
+		).toBe(true);
+		expect(
+			noteMatchesRule(
+				plainNote,
+				createSmartFolderRule({ field: "pinned", operator: "equals", value: "unpinned" })
+			)
+		).toBe(true);
 	});
 });
 

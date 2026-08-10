@@ -23,6 +23,7 @@ const FIELD_OPTIONS: { value: string; label: string }[] = [
 	{ value: "path", label: "Path" },
 	{ value: "ctime", label: "Created" },
 	{ value: "mtime", label: "Modified" },
+	{ value: "pinned", label: "Pinned" },
 	{ value: "frontmatter", label: "Frontmatter property" },
 ];
 
@@ -41,15 +42,27 @@ const OPERATOR_OPTIONS: { value: SmartFolderOperator; label: string }[] = [
 	{ value: "within", label: "within" },
 ];
 
+const PINNED_OPERATOR_OPTIONS: { value: SmartFolderOperator; label: string }[] = [
+	{ value: "equals", label: "is" },
+	{ value: "not-equals", label: "is not" },
+];
+
 const CUSTOM_DATE_VALUE = "__custom__";
 
 function isDateField(field: SmartFolderField): boolean {
 	return field === "ctime" || field === "mtime";
 }
 
+function isPinnedField(field: SmartFolderField): boolean {
+	return field === "pinned";
+}
+
 function operatorsForField(field: SmartFolderField): SmartFolderOperator[] {
 	if (isDateField(field)) {
 		return ["within", "on", "before", "after", "exists", "not-exists"];
+	}
+	if (isPinnedField(field)) {
+		return ["equals", "not-equals"];
 	}
 	return [
 		"equals",
@@ -61,6 +74,14 @@ function operatorsForField(field: SmartFolderField): SmartFolderOperator[] {
 		"exists",
 		"not-exists",
 	];
+}
+
+function operatorLabel(field: SmartFolderField, operator: SmartFolderOperator): string {
+	if (isPinnedField(field)) {
+		const pinned = PINNED_OPERATOR_OPTIONS.find((option) => option.value === operator);
+		if (pinned) return pinned.label;
+	}
+	return OPERATOR_OPTIONS.find((option) => option.value === operator)?.label ?? operator;
 }
 
 function fieldSelectValue(field: SmartFolderField): string {
@@ -212,7 +233,9 @@ export class SmartFolderModal extends Modal {
 				if (!nextOperators.includes(rule.operator)) {
 					rule.operator = nextOperators[0] ?? "equals";
 				}
-				if (isDateField(rule.field)) {
+				if (isPinnedField(rule.field)) {
+					rule.value = rule.value === "false" ? "false" : "true";
+				} else if (isDateField(rule.field)) {
 					if (
 						rule.operator !== "exists" &&
 						rule.operator !== "not-exists" &&
@@ -242,7 +265,7 @@ export class SmartFolderModal extends Modal {
 		setting.addDropdown((dropdown) => {
 			for (const option of OPERATOR_OPTIONS) {
 				if (!allowedOperators.includes(option.value)) continue;
-				dropdown.addOption(option.value, option.label);
+				dropdown.addOption(option.value, operatorLabel(rule.field, option.value));
 			}
 			dropdown.setValue(rule.operator).onChange((value) => {
 				rule.operator = value as SmartFolderOperator;
@@ -256,12 +279,28 @@ export class SmartFolderModal extends Modal {
 						rule.value = defaultDateValue(rule.operator);
 					}
 				}
+				if (isPinnedField(rule.field) && rule.value !== "true" && rule.value !== "false") {
+					rule.value = "true";
+				}
 				this.renderForm();
 			});
 		});
 
 		if (rule.operator !== "exists" && rule.operator !== "not-exists") {
-			if (isDateField(rule.field)) {
+			if (isPinnedField(rule.field)) {
+				if (rule.value !== "true" && rule.value !== "false") {
+					rule.value = "true";
+				}
+				setting.addDropdown((dropdown) => {
+					dropdown
+						.addOption("true", "Pinned")
+						.addOption("false", "Not pinned")
+						.setValue(rule.value)
+						.onChange((value) => {
+							rule.value = value === "false" ? "false" : "true";
+						});
+				});
+			} else if (isDateField(rule.field)) {
 				this.renderDateValueControls(setting, rule);
 			} else {
 				setting.addText((text) => {

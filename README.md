@@ -16,7 +16,7 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - Group notes by **None**, **Modified**, or **Created** (recency buckets), with a separate **Pinned** toggle for bookmarked notes.
 - Right-click a note to **Pin** or **Unpin** it (toggles a core Bookmarks file bookmark).
 - Drag sibling folder rows to save a custom order across sessions (when folder sort is **Custom**, or for nested siblings).
-- Create **smart folders** that look like folders but list notes matching property rules (frontmatter, tags, name, path, created, modified), including relative date filters such as today or last 7 days.
+- Create **smart folders** that look like folders but list notes matching property rules (frontmatter, tags, name, path, created, modified, pinned), including relative date filters such as today or last 7 days.
 - Use **Reveal current note** in the folders or notes header to jump to the active note in its folder list.
 
 ## Use
@@ -25,7 +25,7 @@ Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alt
 
 Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). Right-click a note in the list to pin or unpin it. If Bookmarks is disabled, pin/unpin shows a notice and the Pinned section stays empty. Use the **Pinned** control in the notes pane to show or hide the dedicated pinned group.
 
-Smart folders are stored in plugin settings (not as vault folders). Create one from the folders header, then set one or more rules against frontmatter properties, tags, name, path, created, or modified. For created/modified, choose relative ranges (today, yesterday, last 7/30 days, this/last week or month), a custom last-N-days count with **within**, or a custom date. Right-click a smart folder to edit rules, rename, or delete it. **Reveal current note** opens the active note’s parent folder (or **All notes** for vault-root notes), scrolls to the row, and briefly highlights it.
+Smart folders are stored in plugin settings (not as vault folders). Create one from the folders header, then set one or more rules against frontmatter properties, tags, name, path, created, modified, or pinned state. For created/modified, choose relative ranges (today, yesterday, last 7/30 days, this/last week or month), a custom last-N-days count with **within**, or a custom date. Right-click a smart folder to edit rules, rename, or delete it. **Reveal current note** opens the active note’s parent folder (or **All notes** for vault-root notes), scrolls to the row, and briefly highlights it.
 
 ## Development
 

@@ -19,7 +19,13 @@ export interface FolderSection {
 
 export type SmartFolderMatch = "all" | "any";
 
-export type SmartFolderBuiltinField = "tags" | "name" | "path" | "ctime" | "mtime";
+export type SmartFolderBuiltinField =
+	| "tags"
+	| "name"
+	| "path"
+	| "ctime"
+	| "mtime"
+	| "pinned";
 
 export type SmartFolderField = SmartFolderBuiltinField | `frontmatter:${string}`;
 
