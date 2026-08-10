@@ -44,6 +44,7 @@ describe("smart folder parsing", () => {
 		expect(parsed).toEqual({
 			id: "abc",
 			name: "Done",
+			parentPath: null,
 			match: "any",
 			rules: [
 				{
@@ -54,6 +55,17 @@ describe("smart folder parsing", () => {
 				},
 			],
 		});
+	});
+
+	it("parses parentPath for nested placement", () => {
+		const parsed = parseSmartFolder({
+			id: "abc",
+			name: "Nested",
+			parentPath: "Projects",
+			match: "all",
+			rules: [],
+		});
+		expect(parsed?.parentPath).toBe("Projects");
 	});
 
 	it("returns null for invalid smart folders", () => {

@@ -33,7 +33,7 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 ### 3. Expandable folder tree + notes switching
 
 - The folders pane always lists the vault from the root as a tree.
-- **All notes** appears first; vault folders follow (unassigned, then sections).
+- **All notes** appears first; vault folders and smart folders follow (unassigned, then sections).
 - Chevron expands/collapses subfolders inline in the same list (persisted).
 - Tapping a folder (at any depth) opens that folder’s notes list in the same pane.
 - Back from the notes pane returns to the folders pane (tree expansion state preserved).
@@ -64,7 +64,8 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 ### 6. Smart folders
 
-- Plugin-only virtual folders appear under **All notes** in the folders list (not vault folders).
+- Plugin-only virtual folders appear in the folders list among real folders (not vault folders).
+- Smart folders can be dragged to reorder among siblings, assigned to sections at the root, or nested under a real folder (middle-of-row drop, or drag beside nested siblings).
 - Each smart folder has a name, All/Any match mode, and one or more rules over:
   - Frontmatter properties
   - Tags
@@ -74,7 +75,7 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 - For **within**, Custom days accepts any last-N-days count (for example 14).
 - **Pinned** rules use a single state control: is pinned / is not pinned (from core Bookmarks file bookmarks).
 - Empty rules match no notes.
-- Create from the folders header; right-click to edit rules, rename, or delete.
+- Create from the folders header; right-click to edit rules, rename, move (section / root), or delete.
 - Opening a smart folder shows matching vault notes in the notes pane (depth toggle hidden; parent paths shown).
 
 ### 7. Reveal current note
@@ -89,14 +90,14 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 - Opens in the left sidebar by default.
 - Visuals inherit the active Obsidian theme: transparent pane background, `--nav-item-*` colors/hover/active states, no plugin-owned surface colors.
 - Folder rows are compact and indented by depth, matching the native file explorer density.
-- **All notes** and smart folders use the same icon column as folder rows.
+- **All notes** and smart folders use the same icon column as folder rows; smart folders sort and nest with real folders.
 
 ## Interaction model (summary)
 
-1. Folders pane: All notes + smart folders + unassigned root folders + named sections; Reveal / New smart folder / New section / Sort in header; drag to reorder (custom) or reassign; drag section headers to reorder sections.
+1. Folders pane: All notes + unassigned root folders/smart folders + named sections; Reveal / New smart folder / New section / Sort in header; drag to reorder (custom) or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
 2. Chevron → expand/collapse folder or section; folder body → notes pane for that folder; smart folder → filtered notes pane.
 3. Notes pane: Back → folders; Reveal current note; icon depth toggle (This folder / All below) for real folders; right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
-4. Smart folder context menu → Edit rules / Rename / Delete.
+4. Smart folder context menu → Edit rules / Rename / Move (section or root) / Delete.
 
 ## Out of scope (for now)
 
@@ -106,4 +107,4 @@ The initial implementation leaves these for later:
 - File operations (rename, move, delete, new note)
 - Replacing Obsidian’s built-in explorer (the initial view coexists with it)
 - Mobile-specific interactions beyond responsive sidebar density
-- Drag-reordering smart folders
+- Nesting smart folders under other smart folders

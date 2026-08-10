@@ -15,7 +15,17 @@ import {
 	smartFolderScopeId,
 } from "./constants";
 import { replacePathPrefix } from "./folder-order";
-import { pruneFolderSections, remapFolderSections } from "./folder-sections";
+import {
+	findSectionIdForFolder,
+	pruneFolderSections,
+	remapFolderSections,
+} from "./folder-sections";
+import {
+	pruneMissingSmartParents,
+	remapSmartFolderParents,
+	rootSmartItemKeys,
+	toSmartItemKey,
+} from "./folder-items";
 import { parseSmartFolder } from "./smart-folders";
 import { AlternativeExplorerView } from "./view";
 
@@ -51,7 +61,9 @@ export default class AlternativeExplorerPlugin extends Plugin {
 				const beforeExpanded = this.settings.expandedFolders.length;
 				this.pruneExpandedFolders();
 				if (this.settings.expandedFolders.length !== beforeExpanded) dirty = true;
+				if (this.pruneSmartFolderParents()) dirty = true;
 				if (this.pruneSectionMembership()) dirty = true;
+				if (this.ensureSmartFolderPlacement()) dirty = true;
 				if (dirty) {
 					void this.saveSettings();
 				}
@@ -104,7 +116,9 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		this.ensureCurrentFolderExists();
 		this.ensureNotesScopeExists();
 		this.pruneExpandedFolders();
+		this.pruneSmartFolderParents();
 		this.pruneSectionMembership();
+		this.ensureSmartFolderPlacement();
 		this.pruneCollapsedSections();
 	}
 
@@ -180,7 +194,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			oldPath,
 			newPath
 		);
-		if (this.settings.notesScope !== "all") {
+		if (this.settings.notesScope !== "all" && !isSmartFolderScope(this.settings.notesScope)) {
 			this.settings.notesScope = replacePathPrefix(this.settings.notesScope, oldPath, newPath);
 		}
 		this.settings.expandedFolders = this.settings.expandedFolders.map((path) =>
@@ -190,12 +204,17 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		for (const [parentPath, childPaths] of Object.entries(this.settings.folderOrder)) {
 			const remappedParent = replacePathPrefix(parentPath, oldPath, newPath);
 			remappedOrder[remappedParent] = childPaths.map((path) =>
-				replacePathPrefix(path, oldPath, newPath)
+				isSmartFolderScope(path) ? path : replacePathPrefix(path, oldPath, newPath)
 			);
 		}
 		this.settings.folderOrder = remappedOrder;
 		this.settings.folderSections = remapFolderSections(
 			this.settings.folderSections,
+			oldPath,
+			newPath
+		);
+		this.settings.smartFolders = remapSmartFolderParents(
+			this.settings.smartFolders,
 			oldPath,
 			newPath
 		);
@@ -209,18 +228,90 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		});
 	}
 
+	private pruneSmartFolderParents(): boolean {
+		const result = pruneMissingSmartParents(this.settings.smartFolders, (path) => {
+			const folder = this.app.vault.getAbstractFileByPath(path);
+			return folder instanceof TFolder;
+		});
+		this.settings.smartFolders = result.folders;
+		return result.changed;
+	}
+
 	private pruneSectionMembership(): boolean {
 		const root = this.app.vault.getRoot();
 		const rootPaths = root.children
 			.filter((child): child is TFolder => child instanceof TFolder)
 			.map((child) => child.path);
+		const rootItems = [...rootPaths, ...rootSmartItemKeys(this.settings.smartFolders)];
 		const before = JSON.stringify(this.settings.folderSections);
 		this.settings.folderSections = pruneFolderSections(
 			this.settings.folderSections,
-			rootPaths
+			rootItems
 		);
 		this.pruneCollapsedSections();
 		return JSON.stringify(this.settings.folderSections) !== before;
+	}
+
+	/**
+	 * Ensures every smart folder has a parent placement and appears in the
+	 * matching order list. Missing root smart folders are prepended so older
+	 * settings (flat list under All notes) stay near the top of unassigned.
+	 */
+	private ensureSmartFolderPlacement(): boolean {
+		const rootPath = this.app.vault.getRoot().path;
+		const beforeFolders = JSON.stringify(this.settings.smartFolders);
+		const beforeOrder = JSON.stringify(this.settings.folderOrder);
+		const beforeSections = JSON.stringify(this.settings.folderSections);
+
+		const missingRootKeys: string[] = [];
+		for (const folder of this.settings.smartFolders) {
+			const key = toSmartItemKey(folder.id);
+			if (folder.parentPath !== null) {
+				const parent = this.app.vault.getAbstractFileByPath(folder.parentPath);
+				if (!(parent instanceof TFolder)) {
+					folder.parentPath = null;
+				}
+			}
+
+			if (folder.parentPath === null) {
+				const inSection =
+					findSectionIdForFolder(this.settings.folderSections, key) !== null;
+				const inRootOrder = (this.settings.folderOrder[rootPath] ?? []).includes(key);
+				if (!inSection && !inRootOrder) {
+					missingRootKeys.push(key);
+				}
+			} else {
+				const order = this.settings.folderOrder[folder.parentPath] ?? [];
+				if (!order.includes(key)) {
+					this.settings.folderOrder[folder.parentPath] = [...order, key];
+				}
+				this.settings.folderSections = this.settings.folderSections.map((section) => ({
+					...section,
+					folderPaths: section.folderPaths.filter((path) => path !== key),
+				}));
+			}
+		}
+
+		if (missingRootKeys.length > 0) {
+			const current = this.settings.folderOrder[rootPath] ?? [];
+			const filtered = current.filter((key) => !missingRootKeys.includes(key));
+			this.settings.folderOrder[rootPath] = [...missingRootKeys, ...filtered];
+		}
+
+		const knownSmartKeys = new Set(
+			this.settings.smartFolders.map((folder) => toSmartItemKey(folder.id))
+		);
+		for (const [parentPath, childPaths] of Object.entries(this.settings.folderOrder)) {
+			this.settings.folderOrder[parentPath] = childPaths.filter(
+				(path) => !isSmartFolderScope(path) || knownSmartKeys.has(path)
+			);
+		}
+
+		return (
+			JSON.stringify(this.settings.smartFolders) !== beforeFolders ||
+			JSON.stringify(this.settings.folderOrder) !== beforeOrder ||
+			JSON.stringify(this.settings.folderSections) !== beforeSections
+		);
 	}
 
 	private pruneCollapsedSections(): void {

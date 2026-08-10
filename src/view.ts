@@ -15,6 +15,17 @@ import {
 import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
 import {
+	childSmartItemKeys,
+	effectiveSmartParentPath,
+	isSmartItemKey,
+	placeItemInParentOrder,
+	removeSmartFolderPlacement,
+	rootSmartItemKeys,
+	setSmartFolderParent,
+	smartIdFromItemKey,
+	toSmartItemKey,
+} from "./folder-items";
+import {
 	createFolderSection,
 	deleteSection,
 	findSectionIdForFolder,
@@ -32,6 +43,17 @@ import { SmartFolderModal } from "./smart-folder-modal";
 import { noteMatchesSmartFolder, type SmartFolderNoteSnapshot } from "./smart-folders";
 
 type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
+
+type DropPosition = "before" | "after" | "into";
+
+type FolderDropTarget = {
+	kind: "folder" | "zone";
+	element: HTMLElement;
+	sectionId: string;
+	folderPath?: string;
+	parentPath?: string;
+	allowsInto?: boolean;
+};
 
 const UNASSIGNED_SECTION_ID = "";
 
@@ -312,10 +334,12 @@ export class AlternativeExplorerView extends ItemView {
 				event.dataTransfer.dropEffect = "move";
 			}
 			this.clearDropTargets();
-			const rect = drop.element.getBoundingClientRect();
-			drop.element.addClass(
-				event.clientY < rect.top + rect.height / 2 ? "is-drop-before" : "is-drop-after"
-			);
+			const position = this.dropPositionForEvent(event, drop);
+			if (position === "into") {
+				drop.element.addClass("is-drop-into");
+			} else {
+				drop.element.addClass(position === "before" ? "is-drop-before" : "is-drop-after");
+			}
 		});
 
 		this.registerDomEvent(this.contentEl, "drop", (event) => {
@@ -333,7 +357,7 @@ export class AlternativeExplorerView extends ItemView {
 			const drop = this.getValidFolderDropTarget(event.target);
 			if (!drop || !this.draggedFolderPath) return;
 			event.preventDefault();
-			const position = drop.element.hasClass("is-drop-after") ? "after" : "before";
+			const position = this.dropPositionForEvent(event, drop);
 			void this.handleFolderDrop(this.draggedFolderPath, drop, position);
 			this.finishDrag();
 		});
@@ -354,15 +378,17 @@ export class AlternativeExplorerView extends ItemView {
 
 		const list = section.createDiv({ cls: "alternative-explorer-folder-list" });
 		this.renderAllNotesRow(list);
-		this.renderSmartFolderRows(list);
 
 		const rootFolders = root.children.filter(
 			(child): child is TFolder => child instanceof TFolder
 		);
-		const rootPaths = rootFolders.map((folder) => folder.path);
-		const byPath = new Map(rootFolders.map((folder) => [folder.path, folder]));
+		const rootVaultPaths = rootFolders.map((folder) => folder.path);
+		const rootItemKeys = [
+			...rootVaultPaths,
+			...rootSmartItemKeys(this.plugin.settings.smartFolders),
+		];
 		const { unassigned, sections } = partitionRootFolders(
-			rootPaths,
+			rootItemKeys,
 			this.plugin.settings.folderSections
 		);
 
@@ -375,10 +401,8 @@ export class AlternativeExplorerView extends ItemView {
 				cls: "alternative-explorer-folder-group",
 				attr: { "data-section-id": UNASSIGNED_SECTION_ID, "data-drop-zone": "unassigned" },
 			});
-			for (const path of unassignedSorted) {
-				const folder = byPath.get(path);
-				if (!folder) continue;
-				this.renderFolderBranch(unassignedList, root, folder, 0, UNASSIGNED_SECTION_ID);
+			for (const key of unassignedSorted) {
+				this.renderFolderTreeItem(unassignedList, key, root.path, 0, UNASSIGNED_SECTION_ID);
 			}
 		} else if (sections.length > 0) {
 			list.createDiv({
@@ -388,7 +412,7 @@ export class AlternativeExplorerView extends ItemView {
 		}
 
 		for (const folderSection of sections) {
-			this.renderFolderSection(list, root, folderSection, byPath);
+			this.renderFolderSection(list, root, folderSection);
 		}
 	}
 
@@ -467,8 +491,7 @@ export class AlternativeExplorerView extends ItemView {
 	private renderFolderSection(
 		list: HTMLElement,
 		root: TFolder,
-		folderSection: { id: string; name: string; folderPaths: string[] },
-		byPath: Map<string, TFolder>
+		folderSection: { id: string; name: string; folderPaths: string[] }
 	): void {
 		const collapsed = this.plugin.settings.collapsedSectionIds.includes(folderSection.id);
 		const header = list.createDiv({
@@ -519,10 +542,8 @@ export class AlternativeExplorerView extends ItemView {
 			return;
 		}
 
-		for (const path of sorted) {
-			const folder = byPath.get(path);
-			if (!folder) continue;
-			this.renderFolderBranch(group, root, folder, 0, folderSection.id);
+		for (const key of sorted) {
+			this.renderFolderTreeItem(group, key, root.path, 0, folderSection.id);
 		}
 	}
 
@@ -549,75 +570,110 @@ export class AlternativeExplorerView extends ItemView {
 		setIcon(arrow, "chevron-right");
 	}
 
-	private renderSmartFolderRows(list: HTMLElement): void {
-		for (const smartFolder of this.plugin.settings.smartFolders) {
-			const selected = this.plugin.settings.notesScope === toSmartFolderScope(smartFolder.id);
-			const row = list.createDiv({
-				cls: `alternative-explorer-folder-row is-smart-row${selected ? " is-selected" : ""}`,
-				attr: {
-					"data-smart-folder-id": smartFolder.id,
-				},
-			});
-			row.createSpan({ cls: "alternative-explorer-folder-toggle-spacer" });
-			const button = row.createEl("button", {
-				cls: "alternative-explorer-folder-button",
-				attr: {
-					type: "button",
-					"data-open-smart-folder": smartFolder.id,
-					title: smartFolder.name,
-				},
-			});
-			const icon = button.createSpan({ cls: "alternative-explorer-row-icon" });
-			setIcon(icon, "sparkles");
-			const copy = button.createSpan({ cls: "alternative-explorer-folder-copy" });
-			copy.createSpan({
-				cls: "alternative-explorer-folder-name",
-				text: smartFolder.name,
-			});
-			copy.createSpan({
-				cls: "alternative-explorer-folder-meta",
-				text: this.smartFolderSummary(smartFolder),
-			});
-			const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
-			setIcon(arrow, "chevron-right");
-		}
+	private renderSmartFolderRow(
+		list: HTMLElement,
+		smartFolder: SmartFolder,
+		parentPath: string,
+		depth: number,
+		sectionId: string
+	): void {
+		const root = this.app.vault.getRoot();
+		const isRootChild = parentPath === root.path;
+		const selected = this.plugin.settings.notesScope === toSmartFolderScope(smartFolder.id);
+		const itemKey = toSmartItemKey(smartFolder.id);
+		const row = list.createDiv({
+			cls: `alternative-explorer-folder-row is-smart-row${selected ? " is-selected" : ""}`,
+			attr: {
+				draggable: "true",
+				"data-folder-path": itemKey,
+				"data-smart-folder-id": smartFolder.id,
+				"data-parent-path": parentPath,
+				"data-section-id": isRootChild ? sectionId : "",
+				"data-depth": String(depth),
+				style: `--folder-depth: ${depth}`,
+			},
+		});
+		row.createSpan({ cls: "alternative-explorer-folder-toggle-spacer" });
+		const button = row.createEl("button", {
+			cls: "alternative-explorer-folder-button",
+			attr: {
+				type: "button",
+				"data-open-smart-folder": smartFolder.id,
+				title: smartFolder.name,
+			},
+		});
+		const icon = button.createSpan({ cls: "alternative-explorer-row-icon" });
+		setIcon(icon, "sparkles");
+		const copy = button.createSpan({ cls: "alternative-explorer-folder-copy" });
+		copy.createSpan({
+			cls: "alternative-explorer-folder-name",
+			text: smartFolder.name,
+		});
+		copy.createSpan({
+			cls: "alternative-explorer-folder-meta",
+			text: this.smartFolderSummary(smartFolder),
+		});
+		const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
+		setIcon(arrow, "chevron-right");
+
+		const dragHandle = row.createSpan({
+			cls: "alternative-explorer-drag-handle",
+			attr: { "aria-hidden": "true" },
+		});
+		setIcon(dragHandle, "grip-vertical");
 	}
 
-	private renderFolderBranch(
+	private renderFolderTreeItem(
 		list: HTMLElement,
-		parent: TFolder,
-		folder: TFolder,
+		itemKey: string,
+		parentPath: string,
 		depth: number,
-		sectionId: string = UNASSIGNED_SECTION_ID
+		sectionId: string
 	): void {
-		this.renderFolderRow(list, parent, folder, depth, sectionId);
+		if (isSmartItemKey(itemKey)) {
+			const id = smartIdFromItemKey(itemKey);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			if (!smartFolder) return;
+			this.renderSmartFolderRow(list, smartFolder, parentPath, depth, sectionId);
+			return;
+		}
+
+		const folder = this.app.vault.getAbstractFileByPath(itemKey);
+		if (!(folder instanceof TFolder)) return;
+		this.renderFolderRow(list, parentPath, folder, depth, sectionId);
 
 		if (!this.isExpanded(folder.path)) return;
-
-		for (const child of this.getOrderedSubfolders(folder)) {
-			this.renderFolderBranch(list, folder, child, depth + 1, sectionId);
+		for (const childKey of this.getOrderedChildKeys(folder)) {
+			this.renderFolderTreeItem(list, childKey, folder.path, depth + 1, sectionId);
 		}
 	}
 
 	private renderFolderRow(
 		list: HTMLElement,
-		parent: TFolder,
+		parentPath: string,
 		child: TFolder,
 		depth: number,
 		sectionId: string
 	): void {
-		const hasSubfolders = child.children.some((entry) => entry instanceof TFolder);
+		const vaultChildren = child.children.some((entry) => entry instanceof TFolder);
+		const smartChildren = childSmartItemKeys(
+			this.plugin.settings.smartFolders,
+			child.path
+		).length;
+		const hasSubfolders = vaultChildren || smartChildren > 0;
 		const expanded = this.isExpanded(child.path);
 		const selected = this.plugin.settings.notesScope === child.path;
 		const root = this.app.vault.getRoot();
-		const isRootChild = parent.path === root.path;
+		const isRootChild = parentPath === root.path;
 
 		const row = list.createDiv({
 			cls: `alternative-explorer-folder-row${selected ? " is-selected" : ""}`,
 			attr: {
 				draggable: "true",
 				"data-folder-path": child.path,
-				"data-parent-path": parent.path,
+				"data-parent-path": parentPath,
 				"data-section-id": isRootChild ? sectionId : "",
 				"data-depth": String(depth),
 				style: `--folder-depth: ${depth}`,
@@ -1207,7 +1263,17 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private async finishCreateSmartFolder(folder: SmartFolder): Promise<void> {
-		this.plugin.settings.smartFolders = [...this.plugin.settings.smartFolders, folder];
+		const rootPath = this.app.vault.getRoot().path;
+		const key = toSmartItemKey(folder.id);
+		this.plugin.settings.smartFolders = [
+			...this.plugin.settings.smartFolders,
+			{ ...folder, parentPath: null },
+		];
+		const order = this.plugin.settings.folderOrder[rootPath] ?? [];
+		this.plugin.settings.folderOrder[rootPath] = [
+			key,
+			...order.filter((entry) => entry !== key),
+		];
 		await this.plugin.saveSettings();
 		this.render();
 	}
@@ -1223,7 +1289,9 @@ export class AlternativeExplorerView extends ItemView {
 
 	private async finishEditSmartFolder(folder: SmartFolder): Promise<void> {
 		this.plugin.settings.smartFolders = this.plugin.settings.smartFolders.map((entry) =>
-			entry.id === folder.id ? folder : entry
+			entry.id === folder.id
+				? { ...folder, parentPath: entry.parentPath }
+				: entry
 		);
 		await this.plugin.saveSettings();
 		this.render();
@@ -1245,9 +1313,15 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private async deleteSmartFolder(id: string): Promise<void> {
-		this.plugin.settings.smartFolders = this.plugin.settings.smartFolders.filter(
-			(folder) => folder.id !== id
+		const removed = removeSmartFolderPlacement(
+			this.plugin.settings.smartFolders,
+			this.plugin.settings.folderSections,
+			this.plugin.settings.folderOrder,
+			id
 		);
+		this.plugin.settings.smartFolders = removed.smartFolders;
+		this.plugin.settings.folderSections = removed.folderSections;
+		this.plugin.settings.folderOrder = removed.folderOrder;
 		if (this.plugin.settings.notesScope === toSmartFolderScope(id)) {
 			this.plugin.settings.notesScope = "all";
 			this.plugin.settings.pane = "folders";
@@ -1277,6 +1351,48 @@ export class AlternativeExplorerView extends ItemView {
 					this.renameSmartFolder(id, smartFolder.name);
 				});
 		});
+
+		const itemKey = toSmartItemKey(id);
+		if (smartFolder.parentPath !== null) {
+			menu.addSeparator();
+			menu.addItem((item) => {
+				item
+					.setTitle("Move to root")
+					.setIcon("folder-input")
+					.onClick(() => {
+						void this.moveSmartFolderToRoot(id);
+					});
+			});
+		} else {
+			const currentSectionId = findSectionIdForFolder(
+				this.plugin.settings.folderSections,
+				itemKey
+			);
+			menu.addSeparator();
+			menu.addItem((item) => {
+				item.setTitle("Move to section").setDisabled(true);
+			});
+			menu.addItem((item) => {
+				item
+					.setTitle("No section")
+					.setChecked(currentSectionId === null)
+					.onClick(() => {
+						void this.assignFolderToSection(itemKey, null);
+					});
+			});
+			for (const section of this.plugin.settings.folderSections) {
+				menu.addItem((item) => {
+					item
+						.setTitle(section.name)
+						.setChecked(currentSectionId === section.id)
+						.onClick(() => {
+							void this.assignFolderToSection(itemKey, section.id);
+						});
+				});
+			}
+		}
+
+		menu.addSeparator();
 		menu.addItem((item) => {
 			item
 				.setTitle("Delete smart folder")
@@ -1285,6 +1401,24 @@ export class AlternativeExplorerView extends ItemView {
 					this.confirmDeleteSmartFolder(id, smartFolder.name);
 				});
 		});
+	}
+
+	private async moveSmartFolderToRoot(id: string): Promise<void> {
+		const key = toSmartItemKey(id);
+		this.plugin.settings.smartFolders = setSmartFolderParent(
+			this.plugin.settings.smartFolders,
+			id,
+			null
+		);
+		this.plugin.settings.folderOrder = placeItemInParentOrder(
+			this.plugin.settings.folderOrder,
+			key,
+			this.app.vault.getRoot().path,
+			null,
+			"after"
+		);
+		await this.plugin.saveSettings();
+		this.render();
 	}
 
 	private confirmDeleteSmartFolder(id: string, name: string): void {
@@ -1367,9 +1501,14 @@ export class AlternativeExplorerView extends ItemView {
 
 	private async handleFolderDrop(
 		folderPath: string,
-		drop: { kind: "folder" | "zone"; element: HTMLElement; sectionId: string; folderPath?: string },
-		position: "before" | "after"
+		drop: FolderDropTarget,
+		position: DropPosition
 	): Promise<void> {
+		if (isSmartItemKey(folderPath)) {
+			await this.handleSmartFolderDrop(folderPath, drop, position);
+			return;
+		}
+
 		const folder = this.app.vault.getAbstractFileByPath(folderPath);
 		if (!(folder instanceof TFolder)) return;
 
@@ -1378,10 +1517,12 @@ export class AlternativeExplorerView extends ItemView {
 
 		if (!isRootFolder) {
 			const targetPath = drop.folderPath;
-			if (!targetPath) return;
+			if (!targetPath || position === "into") return;
 			await this.moveNestedFolderRelativeToTarget(folderPath, targetPath, position);
 			return;
 		}
+
+		if (position === "into") return;
 
 		const targetSectionId = drop.sectionId;
 		const custom = this.plugin.settings.folderSortBy === "custom";
@@ -1429,22 +1570,164 @@ export class AlternativeExplorerView extends ItemView {
 		this.plugin.refreshViews();
 	}
 
+	private async handleSmartFolderDrop(
+		itemKey: string,
+		drop: FolderDropTarget,
+		position: DropPosition
+	): Promise<void> {
+		const id = smartIdFromItemKey(itemKey);
+		if (!id) return;
+		const smartFolder = this.plugin.settings.smartFolders.find((folder) => folder.id === id);
+		if (!smartFolder) return;
+
+		const root = this.app.vault.getRoot();
+
+		if (position === "into") {
+			const targetPath = drop.folderPath;
+			if (!targetPath || isSmartItemKey(targetPath)) return;
+			const targetFolder = this.app.vault.getAbstractFileByPath(targetPath);
+			if (!(targetFolder instanceof TFolder)) return;
+
+			this.plugin.settings.smartFolders = setSmartFolderParent(
+				this.plugin.settings.smartFolders,
+				id,
+				targetPath
+			);
+			this.plugin.settings.folderSections = moveFolderToSection(
+				this.plugin.settings.folderSections,
+				itemKey,
+				null
+			);
+			this.removeFromUnassignedOrder(itemKey);
+			this.plugin.settings.folderOrder = placeItemInParentOrder(
+				this.plugin.settings.folderOrder,
+				itemKey,
+				targetPath,
+				null,
+				"after"
+			);
+			if (!this.isExpanded(targetPath)) {
+				this.toggleExpanded(targetPath);
+			}
+			await this.plugin.saveSettings();
+			this.plugin.refreshViews();
+			return;
+		}
+
+		if (drop.kind === "zone") {
+			this.plugin.settings.smartFolders = setSmartFolderParent(
+				this.plugin.settings.smartFolders,
+				id,
+				null
+			);
+			const targetSectionId = drop.sectionId;
+			if (targetSectionId === UNASSIGNED_SECTION_ID) {
+				this.plugin.settings.folderSections = moveFolderToSection(
+					this.plugin.settings.folderSections,
+					itemKey,
+					null
+				);
+				this.appendToUnassignedOrder(itemKey);
+			} else {
+				this.removeFromUnassignedOrder(itemKey);
+				this.plugin.settings.folderSections = moveFolderToSection(
+					this.plugin.settings.folderSections,
+					itemKey,
+					targetSectionId
+				);
+			}
+			this.plugin.settings.folderOrder = placeItemInParentOrder(
+				this.plugin.settings.folderOrder,
+				itemKey,
+				root.path,
+				null,
+				"after"
+			);
+			await this.plugin.saveSettings();
+			this.plugin.refreshViews();
+			return;
+		}
+
+		const targetKey = drop.folderPath;
+		if (!targetKey) return;
+
+		const targetParentPath = drop.parentPath ?? root.path;
+		const nextParentPath = targetParentPath === root.path ? null : targetParentPath;
+		const orderParentPath = targetParentPath;
+		const targetSectionId = drop.sectionId;
+
+		this.plugin.settings.smartFolders = setSmartFolderParent(
+			this.plugin.settings.smartFolders,
+			id,
+			nextParentPath
+		);
+
+		if (nextParentPath === null) {
+			if (targetSectionId === UNASSIGNED_SECTION_ID) {
+				this.plugin.settings.folderSections = moveFolderToSection(
+					this.plugin.settings.folderSections,
+					itemKey,
+					null
+				);
+			} else {
+				this.removeFromUnassignedOrder(itemKey);
+				this.plugin.settings.folderSections = insertFolderInSection(
+					this.plugin.settings.folderSections,
+					targetSectionId,
+					itemKey,
+					targetKey,
+					position
+				);
+				// Section membership owns root order inside named sections.
+				this.plugin.settings.folderOrder = placeItemInParentOrder(
+					this.plugin.settings.folderOrder,
+					itemKey,
+					root.path,
+					null,
+					"after"
+				);
+				await this.plugin.saveSettings();
+				this.plugin.refreshViews();
+				return;
+			}
+		} else {
+			this.plugin.settings.folderSections = moveFolderToSection(
+				this.plugin.settings.folderSections,
+				itemKey,
+				null
+			);
+			this.removeFromUnassignedOrder(itemKey);
+		}
+
+		this.plugin.settings.folderOrder = placeItemInParentOrder(
+			this.plugin.settings.folderOrder,
+			itemKey,
+			orderParentPath,
+			targetKey,
+			position
+		);
+
+		await this.plugin.saveSettings();
+		this.plugin.refreshViews();
+	}
+
 	private async moveNestedFolderRelativeToTarget(
 		folderPath: string,
 		targetPath: string,
 		position: "after" | "before"
 	): Promise<void> {
 		const folder = this.app.vault.getAbstractFileByPath(folderPath);
-		const target = this.app.vault.getAbstractFileByPath(targetPath);
-		if (!(folder instanceof TFolder) || !(target instanceof TFolder)) return;
-		if (folder.parent?.path !== target.parent?.path) return;
+		if (!(folder instanceof TFolder)) return;
 
 		const parent = folder.parent ?? this.app.vault.getRoot();
-		const order = this.getOrderedSubfolders(parent).map((sibling) => sibling.path);
+		const order = this.getOrderedChildKeys(parent);
+		if (!order.includes(targetPath)) return;
+		if (folder.parent?.path !== this.parentPathOfItemKey(targetPath)) return;
+
 		this.plugin.settings.folderOrder[parent.path] = moveFolderRelative(
 			order,
 			folder.path,
-			target.path,
+			targetPath,
 			position
 		);
 		await this.plugin.saveSettings();
@@ -1498,15 +1781,26 @@ export class AlternativeExplorerView extends ItemView {
 			sortBy: this.plugin.settings.folderSortBy,
 			sortDir: this.plugin.settings.folderSortDir,
 			customOrder,
-			getName: (path) => {
-				const folder = this.app.vault.getAbstractFileByPath(path);
-				return folder instanceof TFolder ? folder.name : path;
-			},
+			getName: (path) => this.itemDisplayName(path),
 			getTimestamp: (path, kind) => this.getFolderTimestamp(path, kind),
 		});
 	}
 
+	private itemDisplayName(path: string): string {
+		if (isSmartItemKey(path)) {
+			const id = smartIdFromItemKey(path);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			return smartFolder?.name ?? path;
+		}
+		const folder = this.app.vault.getAbstractFileByPath(path);
+		return folder instanceof TFolder ? folder.name : path;
+	}
+
 	private getFolderTimestamp(path: string, kind: "mtime" | "ctime"): number {
+		if (isSmartItemKey(path)) return 0;
+
 		const cached = this.folderStatCache.get(path);
 		if (cached) return cached[kind];
 
@@ -1537,23 +1831,42 @@ export class AlternativeExplorerView extends ItemView {
 		return stats[kind];
 	}
 
-	private getOrderedSubfolders(folder: TFolder): TFolder[] {
-		const folders = folder.children.filter((child): child is TFolder => child instanceof TFolder);
-		const byPath = new Map(folders.map((child) => [child.path, child]));
-		return mergeFolderOrder(
-			this.plugin.settings.folderOrder[folder.path],
-			folders.map((child) => child.path)
-		)
-			.map((path) => byPath.get(path))
-			.filter((child): child is TFolder => child !== undefined);
+	private getOrderedChildKeys(folder: TFolder): string[] {
+		const vaultPaths = folder.children
+			.filter((child): child is TFolder => child instanceof TFolder)
+			.map((child) => child.path);
+		const smartKeys = childSmartItemKeys(this.plugin.settings.smartFolders, folder.path);
+		return mergeFolderOrder(this.plugin.settings.folderOrder[folder.path], [
+			...vaultPaths,
+			...smartKeys,
+		]);
+	}
+
+	private parentPathOfItemKey(itemKey: string): string | null {
+		const rootPath = this.app.vault.getRoot().path;
+		if (isSmartItemKey(itemKey)) {
+			const id = smartIdFromItemKey(itemKey);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			if (!smartFolder) return null;
+			return effectiveSmartParentPath(smartFolder, rootPath);
+		}
+		const folder = this.app.vault.getAbstractFileByPath(itemKey);
+		if (!(folder instanceof TFolder)) return null;
+		return folder.parent?.path ?? rootPath;
 	}
 
 	private currentUnassignedPaths(): string[] {
 		const root = this.app.vault.getRoot();
-		const rootPaths = root.children
+		const rootVaultPaths = root.children
 			.filter((child): child is TFolder => child instanceof TFolder)
 			.map((child) => child.path);
-		return partitionRootFolders(rootPaths, this.plugin.settings.folderSections).unassigned;
+		const rootItemKeys = [
+			...rootVaultPaths,
+			...rootSmartItemKeys(this.plugin.settings.smartFolders),
+		];
+		return partitionRootFolders(rootItemKeys, this.plugin.settings.folderSections).unassigned;
 	}
 
 	private appendToUnassignedOrder(folderPath: string): void {
@@ -1717,21 +2030,35 @@ export class AlternativeExplorerView extends ItemView {
 		return header;
 	}
 
-	private getValidFolderDropTarget(
-		target: EventTarget | null
-	): { kind: "folder" | "zone"; element: HTMLElement; sectionId: string; folderPath?: string } | null {
+	private getValidFolderDropTarget(target: EventTarget | null): FolderDropTarget | null {
 		if (!this.draggedFolderPath) return null;
 
-		const dragged = this.app.vault.getAbstractFileByPath(this.draggedFolderPath);
-		if (!(dragged instanceof TFolder)) return null;
-
+		const draggedKey = this.draggedFolderPath;
+		const isSmartDrag = isSmartItemKey(draggedKey);
 		const root = this.app.vault.getRoot();
-		const isRootDrag = dragged.parent?.path === root.path;
+
+		let isRootDrag = false;
+		let draggedParentPath: string | null = null;
+
+		if (isSmartDrag) {
+			const id = smartIdFromItemKey(draggedKey);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			if (!smartFolder) return null;
+			draggedParentPath = effectiveSmartParentPath(smartFolder, root.path);
+			isRootDrag = smartFolder.parentPath === null;
+		} else {
+			const dragged = this.app.vault.getAbstractFileByPath(draggedKey);
+			if (!(dragged instanceof TFolder)) return null;
+			draggedParentPath = dragged.parent?.path ?? root.path;
+			isRootDrag = dragged.parent?.path === root.path;
+		}
 
 		const header = (target as HTMLElement | null)?.closest<HTMLElement>(
 			".alternative-explorer-folder-section-header[data-section-id]"
 		);
-		if (header?.dataset.sectionId && isRootDrag) {
+		if (header?.dataset.sectionId && (isRootDrag || isSmartDrag)) {
 			return {
 				kind: "zone",
 				element: header,
@@ -1747,15 +2074,33 @@ export class AlternativeExplorerView extends ItemView {
 		);
 
 		if (row?.dataset.folderPath) {
-			if (row.dataset.folderPath === this.draggedFolderPath) return null;
+			if (row.dataset.folderPath === draggedKey) return null;
 
+			const targetKey = row.dataset.folderPath;
+			const targetParentPath = row.dataset.parentPath ?? root.path;
+			const targetIsSmart = isSmartItemKey(targetKey);
+			const targetIsVault = !targetIsSmart;
+
+			if (isSmartDrag) {
+				return {
+					kind: "folder",
+					element: row,
+					sectionId: row.dataset.sectionId || UNASSIGNED_SECTION_ID,
+					folderPath: targetKey,
+					parentPath: targetParentPath,
+					allowsInto: targetIsVault,
+				};
+			}
+
+			// Vault folder drag
 			if (!isRootDrag) {
-				return dragged.parent?.path === row.dataset.parentPath
+				return draggedParentPath === targetParentPath
 					? {
 							kind: "folder",
 							element: row,
 							sectionId: row.dataset.sectionId ?? UNASSIGNED_SECTION_ID,
-							folderPath: row.dataset.folderPath,
+							folderPath: targetKey,
+							parentPath: targetParentPath,
 						}
 					: null;
 			}
@@ -1764,7 +2109,7 @@ export class AlternativeExplorerView extends ItemView {
 
 			const targetSectionId = row.dataset.sectionId ?? UNASSIGNED_SECTION_ID;
 			const sourceSectionId =
-				findSectionIdForFolder(this.plugin.settings.folderSections, this.draggedFolderPath) ??
+				findSectionIdForFolder(this.plugin.settings.folderSections, draggedKey) ??
 				UNASSIGNED_SECTION_ID;
 			const sameGroup = targetSectionId === sourceSectionId;
 			if (sameGroup && this.plugin.settings.folderSortBy !== "custom") {
@@ -1775,11 +2120,12 @@ export class AlternativeExplorerView extends ItemView {
 				kind: "folder",
 				element: row,
 				sectionId: targetSectionId,
-				folderPath: row.dataset.folderPath,
+				folderPath: targetKey,
+				parentPath: targetParentPath,
 			};
 		}
 
-		if (zone && isRootDrag) {
+		if (zone && (isRootDrag || isSmartDrag)) {
 			return {
 				kind: "zone",
 				element: zone,
@@ -1790,12 +2136,22 @@ export class AlternativeExplorerView extends ItemView {
 		return null;
 	}
 
+	private dropPositionForEvent(event: DragEvent, drop: FolderDropTarget): DropPosition {
+		const rect = drop.element.getBoundingClientRect();
+		const ratio = (event.clientY - rect.top) / Math.max(rect.height, 1);
+		if (drop.allowsInto && ratio >= 0.33 && ratio < 0.67) {
+			return "into";
+		}
+		return ratio < 0.5 ? "before" : "after";
+	}
+
 	private clearDropTargets(): void {
 		this.contentEl
-			.querySelectorAll(".is-drop-before, .is-drop-after")
+			.querySelectorAll(".is-drop-before, .is-drop-after, .is-drop-into")
 			.forEach((element) => {
 				element.removeClass("is-drop-before");
 				element.removeClass("is-drop-after");
+				element.removeClass("is-drop-into");
 			});
 	}
 

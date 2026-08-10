@@ -104,13 +104,19 @@ export function createSmartFolder(
 	name: string,
 	options?: {
 		id?: string;
+		parentPath?: string | null;
 		match?: SmartFolderMatch;
 		rules?: SmartFolderRule[];
 	}
 ): SmartFolder {
+	const parentPath =
+		typeof options?.parentPath === "string" && options.parentPath.length > 0
+			? options.parentPath
+			: null;
 	return {
 		id: options?.id ?? createSmartFolderId(),
 		name: name.trim() || "Untitled",
+		parentPath,
 		match: options?.match === "any" ? "any" : "all",
 		rules: options?.rules ? options.rules.map((rule) => ({ ...rule })) : [],
 	};
@@ -147,9 +153,14 @@ export function parseSmartFolder(value: unknown): SmartFolder | null {
 			if (rule) rules.push(rule);
 		}
 	}
+	const parentPath =
+		typeof record.parentPath === "string" && record.parentPath.length > 0
+			? record.parentPath
+			: null;
 	return {
 		id: record.id,
 		name: record.name.trim() || "Untitled",
+		parentPath,
 		match,
 		rules,
 	};
