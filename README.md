@@ -18,6 +18,7 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - Drag sibling folder rows to save a custom order across sessions (when folder sort is **Custom**, or for nested siblings).
 - Create **smart folders** that look like folders but list notes matching property rules (frontmatter, tags, name, path, created, modified, pinned), including relative date filters such as today or last 7 days. Drag them among real folders, into a folder to nest, or between sections.
 - Use **Reveal current note** in the folders or notes header to jump to the active note in its folder list.
+- Create notes and folders from header buttons: **New note** / **New folder** on the folders pane (vault root), and on the notes pane for the open folder (**New folder** is hidden on smart folders).
 
 ## Use
 
@@ -26,6 +27,8 @@ Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alt
 Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). Right-click a note in the list to pin or unpin it. If Bookmarks is disabled, pin/unpin shows a notice and the Pinned section stays empty. Use the **Pinned** control in the notes pane to show or hide the dedicated pinned group.
 
 Smart folders are stored in plugin settings (not as vault folders). Create one from the folders header, then set one or more rules against frontmatter properties, tags, name, path, created, modified, or pinned state. For created/modified, choose relative ranges (today, yesterday, last 7/30 days, this/last week or month), a custom last-N-days count with **within**, or a custom date. Drag a smart folder among real folders to reorder it, drop it onto the middle of a folder row to nest it, or use the context menu to assign a root smart folder to a section. Right-click a smart folder to edit rules, rename, move, or delete it. **Reveal current note** opens the active note’s parent folder (or **All notes** for vault-root notes), scrolls to the row, and briefly highlights it.
+
+**New note** creates an Untitled markdown file in the target folder and opens it. **New folder** asks for a name and creates a vault folder there. From the folders pane both create at the vault root; from a folder’s notes list they create inside that folder.
 
 ## Development
 
@@ -48,4 +51,4 @@ For watch mode, run `npm run dev`. To test in a vault, copy `main.js`, `manifest
 
 ## Current scope
 
-The initial version intentionally does not add search or file operations.
+The initial version intentionally does not add search, or file operations beyond creating notes and folders.

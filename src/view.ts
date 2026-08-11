@@ -37,6 +37,7 @@ import {
 	sortFolderPaths,
 } from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
+import { nextAvailablePath } from "./create-paths";
 import { SectionNameModal } from "./section-name-modal";
 import { ConfirmModal } from "./confirm-modal";
 import { SmartFolderModal } from "./smart-folder-modal";
@@ -162,6 +163,20 @@ export class AlternativeExplorerView extends ItemView {
 			if (smartFolderControl?.dataset.openSmartFolder) {
 				event.preventDefault();
 				void this.openSmartFolder(smartFolderControl.dataset.openSmartFolder);
+				return;
+			}
+
+			const newNoteControl = element.closest<HTMLButtonElement>("button[data-new-note]");
+			if (newNoteControl) {
+				event.preventDefault();
+				void this.createNote();
+				return;
+			}
+
+			const newFolderControl = element.closest<HTMLButtonElement>("button[data-new-folder]");
+			if (newFolderControl) {
+				event.preventDefault();
+				this.createVaultFolder();
 				return;
 			}
 
@@ -427,6 +442,8 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.renderRevealButton(controls);
+		this.renderNewNoteButton(controls);
+		this.renderNewFolderButton(controls);
 
 		const newSmartFolderButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
@@ -448,7 +465,7 @@ export class AlternativeExplorerView extends ItemView {
 				title: "New section",
 			},
 		});
-		setIcon(newSectionButton, "folder-plus");
+		setIcon(newSectionButton, "list-plus");
 
 		const { folderSortBy, folderSortDir } = this.plugin.settings;
 		const sortTitle =
@@ -486,6 +503,32 @@ export class AlternativeExplorerView extends ItemView {
 			},
 		});
 		setIcon(revealButton, "locate-fixed");
+	}
+
+	private renderNewNoteButton(controls: HTMLElement): void {
+		const button = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-new-note": "true",
+				"aria-label": "New note",
+				title: "New note",
+			},
+		});
+		setIcon(button, "file-plus");
+	}
+
+	private renderNewFolderButton(controls: HTMLElement): void {
+		const button = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-new-folder": "true",
+				"aria-label": "New folder",
+				title: "New folder",
+			},
+		});
+		setIcon(button, "folder-plus");
 	}
 
 	private renderFolderSection(
@@ -812,10 +855,14 @@ export class AlternativeExplorerView extends ItemView {
 	private renderListControls(container: HTMLElement): void {
 		const controls = container.createDiv({
 			cls: "alternative-explorer-list-controls",
-			attr: { "aria-label": "Sort and group" },
+			attr: { "aria-label": "Note controls" },
 		});
 
 		this.renderRevealButton(controls);
+		this.renderNewNoteButton(controls);
+		if (this.canCreateFolderInNotesPane()) {
+			this.renderNewFolderButton(controls);
+		}
 
 		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
 		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
@@ -951,6 +998,90 @@ export class AlternativeExplorerView extends ItemView {
 			if (name === null) return;
 			void this.finishCreateSection(name, initialFolderPath);
 		}).open();
+	}
+
+	private canCreateFolderInNotesPane(): boolean {
+		const scope = this.plugin.settings.notesScope;
+		return scope === "all" || !isSmartFolderScope(scope);
+	}
+
+	/** Parent folder for New note / New folder, based on the active pane. */
+	private resolveCreateParentFolder(): TFolder | null {
+		const root = this.app.vault.getRoot();
+		if (this.plugin.settings.pane !== "notes") {
+			return root;
+		}
+
+		const scope = this.plugin.settings.notesScope;
+		if (scope === "all" || isSmartFolderScope(scope)) {
+			return root;
+		}
+
+		const folder = this.app.vault.getAbstractFileByPath(scope);
+		return folder instanceof TFolder ? folder : null;
+	}
+
+	private async createNote(): Promise<void> {
+		const parent = this.resolveCreateParentFolder();
+		if (!parent) {
+			new Notice("Could not find a folder for the new note.");
+			return;
+		}
+
+		const path = nextAvailablePath(
+			(candidate) => this.app.vault.getAbstractFileByPath(candidate) !== null,
+			parent.path,
+			"Untitled",
+			"md"
+		);
+
+		try {
+			const file = await this.app.vault.create(path, "");
+			if (this.plugin.settings.pane === "folders") {
+				this.plugin.settings.pane = "notes";
+				this.plugin.settings.notesScope = parent.isRoot() ? "all" : parent.path;
+				await this.plugin.saveSettings();
+			}
+			await this.openFile(file.path);
+			this.render();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			new Notice(`Could not create note: ${message}`);
+		}
+	}
+
+	private createVaultFolder(): void {
+		const parent = this.resolveCreateParentFolder();
+		if (!parent) {
+			new Notice("Could not find a parent folder.");
+			return;
+		}
+
+		new SectionNameModal(this.app, "New folder", "Untitled", "Create", (name) => {
+			if (name === null) return;
+			void this.finishCreateVaultFolder(parent, name);
+		}).open();
+	}
+
+	private async finishCreateVaultFolder(parent: TFolder, name: string): Promise<void> {
+		const safeName = name.replaceAll("/", "-").trim() || "Untitled";
+		const path = nextAvailablePath(
+			(candidate) => this.app.vault.getAbstractFileByPath(candidate) !== null,
+			parent.path,
+			safeName
+		);
+
+		try {
+			await this.app.vault.createFolder(path);
+			if (!parent.isRoot() && !this.isExpanded(parent.path)) {
+				this.plugin.settings.expandedFolders.push(parent.path);
+				await this.plugin.saveSettings();
+			}
+			this.render();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			new Notice(`Could not create folder: ${message}`);
+		}
 	}
 
 	private async finishCreateSection(name: string, initialFolderPath?: string): Promise<void> {
