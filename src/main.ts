@@ -1,4 +1,9 @@
-import { Plugin, TFolder, WorkspaceLeaf } from "obsidian";
+import { Plugin, TAbstractFile, TFolder, WorkspaceLeaf } from "obsidian";
+import {
+	bookmarkPathsFingerprint,
+	getBookmarkedFilePaths,
+	subscribeBookmarksChange,
+} from "./bookmarks";
 import {
 	AlternativeExplorerSettings,
 	ExplorerPane,
@@ -17,21 +22,25 @@ import {
 import { replacePathPrefix } from "./folder-order";
 import {
 	findSectionIdForFolder,
-	pruneFolderSections,
 	remapFolderSections,
+	removeFolderFromSections,
 } from "./folder-sections";
 import {
 	pruneMissingSmartParents,
 	remapSmartFolderParents,
-	rootSmartItemKeys,
 	toSmartItemKey,
 } from "./folder-items";
 import { parseSmartFolder } from "./smart-folders";
 import { AlternativeExplorerView } from "./view";
 
+const BOOKMARK_POLL_MS = 750;
+
 export default class AlternativeExplorerPlugin extends Plugin {
 	settings!: AlternativeExplorerSettings;
 	private refreshTimeout: number | null = null;
+	private saveQueue: Promise<void> = Promise.resolve();
+	private lastBookmarkFingerprint: string | null = null;
+	private unsubscribeBookmarks: (() => void) | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -53,38 +62,18 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			},
 		});
 
-		this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh()));
-		this.registerEvent(
-			this.app.vault.on("delete", () => {
-				let dirty = this.ensureCurrentFolderExists();
-				if (this.ensureNotesScopeExists()) dirty = true;
-				const beforeExpanded = this.settings.expandedFolders.length;
-				this.pruneExpandedFolders();
-				if (this.settings.expandedFolders.length !== beforeExpanded) dirty = true;
-				if (this.pruneSmartFolderParents()) dirty = true;
-				if (this.pruneSectionMembership()) dirty = true;
-				if (this.ensureSmartFolderPlacement()) dirty = true;
-				if (dirty) {
-					void this.saveSettings();
-				}
-				this.scheduleRefresh();
-			})
-		);
-		this.registerEvent(this.app.vault.on("modify", () => this.scheduleRefresh()));
-		this.registerEvent(
-			this.app.vault.on("rename", (file, oldPath) => {
-				if (file instanceof TFolder) {
-					void this.remapFolderPath(oldPath, file.path);
-				}
-				this.scheduleRefresh();
-			})
-		);
+		this.app.workspace.onLayoutReady(() => {
+			this.registerVaultListeners();
+			this.registerBookmarksRefresh();
+		});
 	}
 
 	onunload(): void {
 		if (this.refreshTimeout !== null) {
 			window.clearTimeout(this.refreshTimeout);
 		}
+		this.unsubscribeBookmarks?.();
+		this.unsubscribeBookmarks = null;
 	}
 
 	async loadSettings(): Promise<void> {
@@ -117,13 +106,20 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		this.ensureNotesScopeExists();
 		this.pruneExpandedFolders();
 		this.pruneSmartFolderParents();
-		this.pruneSectionMembership();
+		// Do not prune section membership against root.children here: the vault
+		// tree may still be incomplete on load, and wiping membership would be
+		// persisted on the next save. Display filtering handles missing paths.
 		this.ensureSmartFolderPlacement();
 		this.pruneCollapsedSections();
 	}
 
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		// Serialize writes so overlapping saves cannot finish out of order and
+		// persist a stale in-memory settings object.
+		this.saveQueue = this.saveQueue.then(() => this.saveData(this.settings)).catch(() => {
+			// Keep the queue alive after a failed write so later saves still run.
+		});
+		await this.saveQueue;
 	}
 
 	refreshViews(): void {
@@ -134,7 +130,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		}
 	}
 
-	private scheduleRefresh(): void {
+	scheduleRefresh(): void {
 		if (this.refreshTimeout !== null) {
 			window.clearTimeout(this.refreshTimeout);
 		}
@@ -142,6 +138,84 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			this.refreshTimeout = null;
 			this.refreshViews();
 		}, 150);
+	}
+
+	private registerVaultListeners(): void {
+		this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh()));
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				this.handleVaultDelete(file);
+			})
+		);
+		this.registerEvent(this.app.vault.on("modify", () => this.scheduleRefresh()));
+		this.registerEvent(
+			this.app.vault.on("rename", (file, oldPath) => {
+				if (file instanceof TFolder) {
+					void this.remapFolderPath(oldPath, file.path);
+				}
+				this.scheduleRefresh();
+			})
+		);
+	}
+
+	private registerBookmarksRefresh(): void {
+		this.unsubscribeBookmarks?.();
+		this.unsubscribeBookmarks = subscribeBookmarksChange(this.app, () => {
+			this.lastBookmarkFingerprint = bookmarkPathsFingerprint(
+				getBookmarkedFilePaths(this.app)
+			);
+			this.scheduleRefresh();
+		});
+		if (this.unsubscribeBookmarks) {
+			this.register(() => {
+				this.unsubscribeBookmarks?.();
+				this.unsubscribeBookmarks = null;
+			});
+		}
+
+		this.lastBookmarkFingerprint = bookmarkPathsFingerprint(getBookmarkedFilePaths(this.app));
+		this.registerInterval(
+			window.setInterval(() => {
+				if (
+					this.app.workspace.getLeavesOfType(VIEW_TYPE_ALTERNATIVE_EXPLORER).length === 0
+				) {
+					return;
+				}
+				const next = bookmarkPathsFingerprint(getBookmarkedFilePaths(this.app));
+				if (next === this.lastBookmarkFingerprint) {
+					return;
+				}
+				this.lastBookmarkFingerprint = next;
+				this.scheduleRefresh();
+			}, BOOKMARK_POLL_MS)
+		);
+	}
+
+	private handleVaultDelete(file: TAbstractFile): void {
+		let dirty = this.ensureCurrentFolderExists();
+		if (this.ensureNotesScopeExists()) dirty = true;
+		const beforeExpanded = this.settings.expandedFolders.length;
+		this.pruneExpandedFolders();
+		if (this.settings.expandedFolders.length !== beforeExpanded) dirty = true;
+		if (this.pruneSmartFolderParents()) dirty = true;
+
+		if (file instanceof TFolder) {
+			const beforeSections = JSON.stringify(this.settings.folderSections);
+			this.settings.folderSections = removeFolderFromSections(
+				this.settings.folderSections,
+				file.path
+			);
+			this.pruneCollapsedSections();
+			if (JSON.stringify(this.settings.folderSections) !== beforeSections) {
+				dirty = true;
+			}
+		}
+
+		if (this.ensureSmartFolderPlacement()) dirty = true;
+		if (dirty) {
+			void this.saveSettings();
+		}
+		this.scheduleRefresh();
 	}
 
 	private async activateView(): Promise<void> {
@@ -235,21 +309,6 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		});
 		this.settings.smartFolders = result.folders;
 		return result.changed;
-	}
-
-	private pruneSectionMembership(): boolean {
-		const root = this.app.vault.getRoot();
-		const rootPaths = root.children
-			.filter((child): child is TFolder => child instanceof TFolder)
-			.map((child) => child.path);
-		const rootItems = [...rootPaths, ...rootSmartItemKeys(this.settings.smartFolders)];
-		const before = JSON.stringify(this.settings.folderSections);
-		this.settings.folderSections = pruneFolderSections(
-			this.settings.folderSections,
-			rootItems
-		);
-		this.pruneCollapsedSections();
-		return JSON.stringify(this.settings.folderSections) !== before;
 	}
 
 	/**
