@@ -45,6 +45,8 @@ Do not edit the generated `main.js` directly.
 | `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
 | `src/create-paths.ts` | Pure helpers for unique note/folder vault paths |
 | `src/view.ts` | Sidebar folders/notes pane switching and note rows |
+| `src/file-type-icons.ts` | Lucide icon names by vault file extension |
+| `src/file-openable.ts` | Whether Obsidian can open a file type; default-app open |
 | `src/note-groups.ts` | Pure pinned/recency grouping for the notes list |
 | `src/bookmarks.ts` | Core Bookmarks plugin file-path reader |
 | `src/folder-order.ts` | Pure folder-order and path-remapping helpers |

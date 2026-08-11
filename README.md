@@ -19,10 +19,12 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - Create **smart folders** that look like folders but list notes matching property rules (frontmatter, tags, name, path, created, modified, pinned), including relative date filters such as today or last 7 days. Drag them among real folders, into a folder to nest, or between sections.
 - Use **Reveal current note** in the folders or notes header to jump to the active note in its folder list.
 - Create notes and folders from header buttons: **New note** / **New folder** on the folders pane (vault root), and on the notes pane for the open folder (**New folder** is hidden on smart folders).
+- Note rows use file-type icons (markdown, images, PDF, canvas, and more).
+- With the notes list focused, **Up** / **Down** moves between notes. Obsidian-supported files open immediately in the current tab (or a new tab if that tab is pinned). Unsupported files are highlighted only until you press **Enter** or click them a second time (opens with the system default app).
 
 ## Use
 
-Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in the left sidebar. Selecting a note opens it in the main editor.
+Enable the plugin, then select the Alternative Explorer ribbon icon or run **Alternative Explorer: Open explorer view** from the command palette. The explorer opens in the left sidebar. Selecting a note opens it in the main editor. Unsupported attachments need a second click or **Enter** to open outside Obsidian.
 
 Pinned notes come from Obsidian's core **Bookmarks** plugin (file bookmarks). Right-click a note in the list to pin or unpin it. If Bookmarks is disabled, pin/unpin shows a notice and the Pinned section stays empty. Use the **Pinned** control in the notes pane to show or hide the dedicated pinned group.
 

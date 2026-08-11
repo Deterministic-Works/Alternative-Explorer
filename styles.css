@@ -335,6 +335,18 @@
 	background-color: var(--nav-item-background-hover, var(--background-modifier-hover));
 }
 
+.alternative-explorer-file-row.is-active {
+	color: var(--nav-item-color-active, var(--text-normal));
+	background-color: var(--nav-item-background-active, var(--background-modifier-hover));
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+	font-weight: var(--nav-item-weight-active, var(--font-medium));
+}
+
+.alternative-explorer-file-row.is-active .alternative-explorer-file-title,
+.alternative-explorer-file-row.is-active .alternative-explorer-row-icon {
+	color: inherit;
+}
+
 .alternative-explorer-folder-row.is-selected {
 	color: var(--nav-item-color-active, var(--text-normal));
 	background-color: var(--nav-item-background-active, var(--background-modifier-hover));
