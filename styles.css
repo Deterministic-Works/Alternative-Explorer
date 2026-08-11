@@ -33,15 +33,6 @@
 	gap: 2px;
 }
 
-.alternative-explorer-create-row {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 2px;
-	min-height: 24px;
-	margin-bottom: 4px;
-}
-
 /* Reset Obsidian default button chrome so rows inherit the sidebar */
 .alternative-explorer-view button {
 	font: inherit;
