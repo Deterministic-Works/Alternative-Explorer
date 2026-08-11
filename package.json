@@ -1,6 +1,6 @@
 {
 	"name": "alternative-explorer",
-	"version": "0.8.3",
+	"version": "0.8.4",
 	"description": "An Apple Notes–style sidebar file explorer for Obsidian.",
 	"main": "main.js",
 	"type": "module",

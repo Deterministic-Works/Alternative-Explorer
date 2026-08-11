@@ -468,10 +468,7 @@ export class AlternativeExplorerView extends ItemView {
 		setIcon(newSectionButton, "list-plus");
 
 		const { folderSortBy, folderSortDir } = this.plugin.settings;
-		const sortTitle =
-			folderSortBy === "custom"
-				? "Sort: Custom"
-				: `Sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
+		const sortTitle = `Sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
 		const sortButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
 			attr: {
@@ -482,14 +479,7 @@ export class AlternativeExplorerView extends ItemView {
 				title: sortTitle,
 			},
 		});
-		setIcon(
-			sortButton,
-			folderSortBy === "custom"
-				? "list-ordered"
-				: folderSortDir === "asc"
-					? "arrow-up-narrow-wide"
-					: "arrow-down-wide-narrow"
-		);
+		setIcon(sortButton, folderSortDir === "asc" ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow");
 	}
 
 	private renderRevealButton(controls: HTMLElement): void {
@@ -1157,35 +1147,27 @@ export class AlternativeExplorerView extends ItemView {
 					.setTitle(FOLDER_SORT_BY_LABELS[sortBy])
 					.setChecked(this.plugin.settings.folderSortBy === sortBy)
 					.onClick(() => {
-						const nextDir =
-							sortBy === "name"
-								? "asc"
-								: sortBy === "custom"
-									? this.plugin.settings.folderSortDir
-									: "desc";
-						void this.setFolderSort(sortBy, nextDir);
+						void this.setFolderSort(sortBy, this.plugin.settings.folderSortDir);
 					});
 			});
 		}
-		if (this.plugin.settings.folderSortBy !== "custom") {
-			menu.addSeparator();
-			menu.addItem((item) => {
-				item
-					.setTitle("Ascending")
-					.setChecked(this.plugin.settings.folderSortDir === "asc")
-					.onClick(() => {
-						void this.setFolderSort(this.plugin.settings.folderSortBy, "asc");
-					});
-			});
-			menu.addItem((item) => {
-				item
-					.setTitle("Descending")
-					.setChecked(this.plugin.settings.folderSortDir === "desc")
-					.onClick(() => {
-						void this.setFolderSort(this.plugin.settings.folderSortBy, "desc");
-					});
-			});
-		}
+		menu.addSeparator();
+		menu.addItem((item) => {
+			item
+				.setTitle("Ascending")
+				.setChecked(this.plugin.settings.folderSortDir === "asc")
+				.onClick(() => {
+					void this.setFolderSort(this.plugin.settings.folderSortBy, "asc");
+				});
+		});
+		menu.addItem((item) => {
+			item
+				.setTitle("Descending")
+				.setChecked(this.plugin.settings.folderSortDir === "desc")
+				.onClick(() => {
+					void this.setFolderSort(this.plugin.settings.folderSortBy, "desc");
+				});
+		});
 		const rect = anchor.getBoundingClientRect();
 		menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
 		event.stopPropagation();
