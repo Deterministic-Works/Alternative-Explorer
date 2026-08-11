@@ -433,6 +433,8 @@ export class AlternativeExplorerView extends ItemView {
 
 	private renderFoldersHeader(container: HTMLElement): void {
 		const header = container.createEl("header", { cls: "alternative-explorer-header" });
+		this.renderCreateActionsRow(header, true);
+
 		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
 		heading.createEl("h1", { text: "Folders" });
 
@@ -442,8 +444,6 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.renderRevealButton(controls);
-		this.renderNewNoteButton(controls);
-		this.renderNewFolderButton(controls);
 
 		const newSmartFolderButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
@@ -490,6 +490,17 @@ export class AlternativeExplorerView extends ItemView {
 					? "arrow-up-narrow-wide"
 					: "arrow-down-wide-narrow"
 		);
+	}
+
+	private renderCreateActionsRow(header: HTMLElement, includeFolder: boolean): void {
+		const row = header.createDiv({
+			cls: "alternative-explorer-create-row",
+			attr: { "aria-label": "Create" },
+		});
+		this.renderNewNoteButton(row);
+		if (includeFolder) {
+			this.renderNewFolderButton(row);
+		}
 	}
 
 	private renderRevealButton(controls: HTMLElement): void {
@@ -842,6 +853,8 @@ export class AlternativeExplorerView extends ItemView {
 			text: "Folders",
 		});
 
+		this.renderCreateActionsRow(header, this.canCreateFolderInNotesPane());
+
 		const heading = header.createDiv({ cls: "alternative-explorer-heading" });
 		const titleGroup = heading.createDiv({ cls: "alternative-explorer-title-group" });
 		titleGroup.createEl("h1", { text: title });
@@ -859,10 +872,6 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.renderRevealButton(controls);
-		this.renderNewNoteButton(controls);
-		if (this.canCreateFolderInNotesPane()) {
-			this.renderNewFolderButton(controls);
-		}
 
 		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
 		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
