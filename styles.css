@@ -212,8 +212,20 @@
 }
 
 .alternative-explorer-file-list {
-	gap: 2px;
+	gap: 0;
 	padding: 2px 4px 8px;
+}
+
+/* Hairline dividers between notes for clearer row separation. */
+.alternative-explorer-file-row + .alternative-explorer-file-row::before {
+	content: "";
+	position: absolute;
+	left: 8px;
+	right: 8px;
+	top: 0;
+	height: 1px;
+	background-color: var(--background-modifier-border);
+	pointer-events: none;
 }
 
 .alternative-explorer-folder-row,
