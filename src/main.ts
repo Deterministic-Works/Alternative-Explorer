@@ -10,14 +10,17 @@ import {
 	FolderSection,
 	FolderSortBy,
 	FolderSortDir,
+	FolderSortRule,
 	NoteGroupBy,
 	NoteSortBy,
 	NoteSortDir,
+	NoteSortRule,
 	SmartFolder,
 	VIEW_TYPE_ALTERNATIVE_EXPLORER,
 	createDefaultSettings,
 	isSmartFolderScope,
 	smartFolderScopeId,
+	toSmartFolderScope,
 } from "./constants";
 import { replacePathPrefix } from "./folder-order";
 import {
@@ -31,6 +34,11 @@ import {
 	toSmartItemKey,
 } from "./folder-items";
 import { parseSmartFolder } from "./smart-folders";
+import {
+	pruneMissingOverrideKeys,
+	remapSortOverrideKeys,
+} from "./sort-overrides";
+import { AlternativeExplorerSettingTab } from "./settings-tab";
 import { AlternativeExplorerView } from "./view";
 
 const BOOKMARK_POLL_MS = 750;
@@ -61,6 +69,8 @@ export default class AlternativeExplorerPlugin extends Plugin {
 				void this.activateView();
 			},
 		});
+
+		this.addSettingTab(new AlternativeExplorerSettingTab(this.app, this));
 
 		this.app.workspace.onLayoutReady(() => {
 			this.registerVaultListeners();
@@ -95,9 +105,11 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			collapsedSectionIds: this.parseExpandedFolders(saved?.collapsedSectionIds),
 			folderSortBy: this.parseFolderSortBy(saved?.folderSortBy),
 			folderSortDir: this.parseFolderSortDir(saved?.folderSortDir),
+			folderSortOverrides: this.parseFolderSortOverrides(saved?.folderSortOverrides),
 			smartFolders: this.parseSmartFolders(saved?.smartFolders),
 			sortBy: this.parseSortBy(saved?.sortBy),
 			sortDir: this.parseSortDir(saved?.sortDir),
+			noteSortOverrides: this.parseNoteSortOverrides(saved?.noteSortOverrides),
 			groupBy: this.parseGroupBy(saved?.groupBy),
 			groupPinned:
 				typeof saved?.groupPinned === "boolean" ? saved.groupPinned : defaults.groupPinned,
@@ -111,6 +123,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		// persisted on the next save. Display filtering handles missing paths.
 		this.ensureSmartFolderPlacement();
 		this.pruneCollapsedSections();
+		this.pruneSortOverrides();
 	}
 
 	async saveSettings(): Promise<void> {
@@ -211,6 +224,7 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			}
 		}
 
+		if (this.pruneSortOverrides()) dirty = true;
 		if (this.ensureSmartFolderPlacement()) dirty = true;
 		if (dirty) {
 			void this.saveSettings();
@@ -292,7 +306,59 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			oldPath,
 			newPath
 		);
+		this.settings.folderSortOverrides = remapSortOverrideKeys(
+			this.settings.folderSortOverrides,
+			oldPath,
+			newPath
+		);
+		this.settings.noteSortOverrides = remapSortOverrideKeys(
+			this.settings.noteSortOverrides,
+			oldPath,
+			newPath
+		);
 		await this.saveSettings();
+	}
+
+	removeNoteSortOverrideForSmartFolder(id: string): void {
+		const key = toSmartFolderScope(id);
+		if (!(key in this.settings.noteSortOverrides)) return;
+		const next = { ...this.settings.noteSortOverrides };
+		delete next[key];
+		this.settings.noteSortOverrides = next;
+	}
+
+	private pruneSortOverrides(): boolean {
+		const rootPath = this.app.vault.getRoot().path;
+		const beforeFolders = JSON.stringify(this.settings.folderSortOverrides);
+		const beforeNotes = JSON.stringify(this.settings.noteSortOverrides);
+
+		this.settings.folderSortOverrides = pruneMissingOverrideKeys(
+			this.settings.folderSortOverrides,
+			(key) => {
+				if (key === rootPath) return true;
+				const folder = this.app.vault.getAbstractFileByPath(key);
+				return folder instanceof TFolder;
+			}
+		);
+
+		const knownSmartIds = new Set(this.settings.smartFolders.map((folder) => folder.id));
+		this.settings.noteSortOverrides = pruneMissingOverrideKeys(
+			this.settings.noteSortOverrides,
+			(key) => {
+				if (key === "all") return true;
+				if (isSmartFolderScope(key)) {
+					const id = smartFolderScopeId(key);
+					return id !== null && knownSmartIds.has(id);
+				}
+				const folder = this.app.vault.getAbstractFileByPath(key);
+				return folder instanceof TFolder;
+			}
+		);
+
+		return (
+			JSON.stringify(this.settings.folderSortOverrides) !== beforeFolders ||
+			JSON.stringify(this.settings.noteSortOverrides) !== beforeNotes
+		);
 	}
 
 	private pruneExpandedFolders(): void {
@@ -409,6 +475,38 @@ export default class AlternativeExplorerPlugin extends Plugin {
 
 	private parseFolderSortDir(value: unknown): FolderSortDir {
 		return value === "asc" || value === "desc" ? value : "asc";
+	}
+
+	private parseFolderSortOverrides(value: unknown): Record<string, FolderSortRule> {
+		return this.parseSortOverrides(value, (sortBy, sortDir) => ({
+			sortBy: this.parseFolderSortBy(sortBy),
+			sortDir: this.parseFolderSortDir(sortDir),
+		}));
+	}
+
+	private parseNoteSortOverrides(value: unknown): Record<string, NoteSortRule> {
+		return this.parseSortOverrides(value, (sortBy, sortDir) => ({
+			sortBy: this.parseSortBy(sortBy),
+			sortDir: this.parseSortDir(sortDir),
+		}));
+	}
+
+	private parseSortOverrides<TRule>(
+		value: unknown,
+		parseRule: (sortBy: unknown, sortDir: unknown) => TRule
+	): Record<string, TRule> {
+		if (!value || typeof value !== "object" || Array.isArray(value)) {
+			return Object.create(null) as Record<string, TRule>;
+		}
+
+		const parsed = Object.create(null) as Record<string, TRule>;
+		for (const [key, entry] of Object.entries(value)) {
+			if (typeof key !== "string" || key.length === 0) continue;
+			if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+			const record = entry as Record<string, unknown>;
+			parsed[key] = parseRule(record.sortBy, record.sortDir);
+		}
+		return parsed;
 	}
 
 	private parseGroupBy(value: unknown): NoteGroupBy {

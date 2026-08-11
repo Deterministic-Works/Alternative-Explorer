@@ -42,6 +42,13 @@ import { SectionNameModal } from "./section-name-modal";
 import { ConfirmModal } from "./confirm-modal";
 import { SmartFolderModal } from "./smart-folder-modal";
 import { noteMatchesSmartFolder, type SmartFolderNoteSnapshot } from "./smart-folders";
+import {
+	clearSortOverride,
+	hasSortOverride,
+	resolveFolderSort,
+	resolveNoteSort,
+	setSortOverride,
+} from "./sort-overrides";
 
 type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
 
@@ -219,7 +226,10 @@ export class AlternativeExplorerView extends ItemView {
 			);
 			if (folderSortMenuControl) {
 				event.preventDefault();
-				this.showFolderSortMenu(event, folderSortMenuControl);
+				const parentPath =
+					folderSortMenuControl.dataset.folderSortParent ??
+					this.app.vault.getRoot().path;
+				this.showFolderSortMenu(event, folderSortMenuControl, parentPath);
 				return;
 			}
 
@@ -467,13 +477,16 @@ export class AlternativeExplorerView extends ItemView {
 		});
 		setIcon(newSectionButton, "list-plus");
 
-		const { folderSortBy, folderSortDir } = this.plugin.settings;
+		const { sortBy: folderSortBy, sortDir: folderSortDir } = this.effectiveFolderSort(
+			this.app.vault.getRoot().path
+		);
 		const sortTitle = `Sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
 		const sortButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-open-folder-sort-menu": "true",
+				"data-folder-sort-parent": this.app.vault.getRoot().path,
 				"aria-haspopup": "menu",
 				"aria-label": sortTitle,
 				title: sortTitle,
@@ -761,7 +774,8 @@ export class AlternativeExplorerView extends ItemView {
 
 		const files = this.getNotesForScope();
 		const pinnedPaths = getBookmarkedFilePaths(this.app);
-		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
+		const { sortBy, sortDir } = this.effectiveNoteSort();
+		const { groupBy, groupPinned } = this.plugin.settings;
 		const groups = buildNoteGroups(
 			files.map((file) => ({
 				file,
@@ -854,7 +868,27 @@ export class AlternativeExplorerView extends ItemView {
 			this.renderNewFolderButton(controls);
 		}
 
-		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
+		const notesFolderPath = this.notesFolderSortParent();
+		if (notesFolderPath !== null) {
+			const { sortBy: folderSortBy, sortDir: folderSortDir } =
+				this.effectiveFolderSort(notesFolderPath);
+			const folderSortTitle = `Folder sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
+			const folderSortButton = controls.createEl("button", {
+				cls: "alternative-explorer-control-button",
+				attr: {
+					type: "button",
+					"data-open-folder-sort-menu": "true",
+					"data-folder-sort-parent": notesFolderPath,
+					"aria-haspopup": "menu",
+					"aria-label": folderSortTitle,
+					title: folderSortTitle,
+				},
+			});
+			setIcon(folderSortButton, "folders");
+		}
+
+		const { sortBy, sortDir } = this.effectiveNoteSort();
+		const { groupBy, groupPinned } = this.plugin.settings;
 		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
 		const sortButton = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
@@ -1100,27 +1134,55 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private async setSort(sortBy: NoteSortBy, sortDir: NoteSortDir): Promise<void> {
-		if (
-			this.plugin.settings.sortBy === sortBy &&
-			this.plugin.settings.sortDir === sortDir
-		) {
+		const scope = this.plugin.settings.notesScope;
+		const current = this.effectiveNoteSort();
+		if (current.sortBy === sortBy && current.sortDir === sortDir) {
 			return;
 		}
-		this.plugin.settings.sortBy = sortBy;
-		this.plugin.settings.sortDir = sortDir;
+		this.plugin.settings.noteSortOverrides = setSortOverride(
+			this.plugin.settings.noteSortOverrides,
+			scope,
+			{ sortBy, sortDir }
+		);
 		await this.plugin.saveSettings();
 		this.render();
 	}
 
-	private async setFolderSort(sortBy: FolderSortBy, sortDir: FolderSortDir): Promise<void> {
-		if (
-			this.plugin.settings.folderSortBy === sortBy &&
-			this.plugin.settings.folderSortDir === sortDir
-		) {
+	private async clearNoteSortOverride(): Promise<void> {
+		const scope = this.plugin.settings.notesScope;
+		if (!hasSortOverride(this.plugin.settings.noteSortOverrides, scope)) return;
+		this.plugin.settings.noteSortOverrides = clearSortOverride(
+			this.plugin.settings.noteSortOverrides,
+			scope
+		);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async setFolderSort(
+		parentPath: string,
+		sortBy: FolderSortBy,
+		sortDir: FolderSortDir
+	): Promise<void> {
+		const current = this.effectiveFolderSort(parentPath);
+		if (current.sortBy === sortBy && current.sortDir === sortDir) {
 			return;
 		}
-		this.plugin.settings.folderSortBy = sortBy;
-		this.plugin.settings.folderSortDir = sortDir;
+		this.plugin.settings.folderSortOverrides = setSortOverride(
+			this.plugin.settings.folderSortOverrides,
+			parentPath,
+			{ sortBy, sortDir }
+		);
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async clearFolderSortOverride(parentPath: string): Promise<void> {
+		if (!hasSortOverride(this.plugin.settings.folderSortOverrides, parentPath)) return;
+		this.plugin.settings.folderSortOverrides = clearSortOverride(
+			this.plugin.settings.folderSortOverrides,
+			parentPath
+		);
 		await this.plugin.saveSettings();
 		this.render();
 	}
@@ -1139,15 +1201,24 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private showFolderSortMenu(event: MouseEvent, anchor: HTMLElement): void {
+	private showFolderSortMenu(
+		event: MouseEvent,
+		anchor: HTMLElement,
+		parentPath: string
+	): void {
 		const menu = new Menu();
+		const effective = this.effectiveFolderSort(parentPath);
+		const hasOverride = hasSortOverride(
+			this.plugin.settings.folderSortOverrides,
+			parentPath
+		);
 		for (const sortBy of ["name", "mtime", "ctime", "custom"] as const) {
 			menu.addItem((item) => {
 				item
 					.setTitle(FOLDER_SORT_BY_LABELS[sortBy])
-					.setChecked(this.plugin.settings.folderSortBy === sortBy)
+					.setChecked(effective.sortBy === sortBy)
 					.onClick(() => {
-						void this.setFolderSort(sortBy, this.plugin.settings.folderSortDir);
+						void this.setFolderSort(parentPath, sortBy, effective.sortDir);
 					});
 			});
 		}
@@ -1155,17 +1226,26 @@ export class AlternativeExplorerView extends ItemView {
 		menu.addItem((item) => {
 			item
 				.setTitle("Ascending")
-				.setChecked(this.plugin.settings.folderSortDir === "asc")
+				.setChecked(effective.sortDir === "asc")
 				.onClick(() => {
-					void this.setFolderSort(this.plugin.settings.folderSortBy, "asc");
+					void this.setFolderSort(parentPath, effective.sortBy, "asc");
 				});
 		});
 		menu.addItem((item) => {
 			item
 				.setTitle("Descending")
-				.setChecked(this.plugin.settings.folderSortDir === "desc")
+				.setChecked(effective.sortDir === "desc")
 				.onClick(() => {
-					void this.setFolderSort(this.plugin.settings.folderSortBy, "desc");
+					void this.setFolderSort(parentPath, effective.sortBy, "desc");
+				});
+		});
+		menu.addSeparator();
+		menu.addItem((item) => {
+			item
+				.setTitle("Use default")
+				.setDisabled(!hasOverride)
+				.onClick(() => {
+					void this.clearFolderSortOverride(parentPath);
 				});
 		});
 		const rect = anchor.getBoundingClientRect();
@@ -1175,13 +1255,18 @@ export class AlternativeExplorerView extends ItemView {
 
 	private showSortMenu(event: MouseEvent, anchor: HTMLElement): void {
 		const menu = new Menu();
+		const effective = this.effectiveNoteSort();
+		const hasOverride = hasSortOverride(
+			this.plugin.settings.noteSortOverrides,
+			this.plugin.settings.notesScope
+		);
 		for (const sortBy of ["name", "mtime", "ctime"] as const) {
 			menu.addItem((item) => {
 				item
 					.setTitle(SORT_BY_LABELS[sortBy])
-					.setChecked(this.plugin.settings.sortBy === sortBy)
+					.setChecked(effective.sortBy === sortBy)
 					.onClick(() => {
-						void this.setSort(sortBy, this.plugin.settings.sortDir);
+						void this.setSort(sortBy, effective.sortDir);
 					});
 			});
 		}
@@ -1189,17 +1274,26 @@ export class AlternativeExplorerView extends ItemView {
 		menu.addItem((item) => {
 			item
 				.setTitle("Ascending")
-				.setChecked(this.plugin.settings.sortDir === "asc")
+				.setChecked(effective.sortDir === "asc")
 				.onClick(() => {
-					void this.setSort(this.plugin.settings.sortBy, "asc");
+					void this.setSort(effective.sortBy, "asc");
 				});
 		});
 		menu.addItem((item) => {
 			item
 				.setTitle("Descending")
-				.setChecked(this.plugin.settings.sortDir === "desc")
+				.setChecked(effective.sortDir === "desc")
 				.onClick(() => {
-					void this.setSort(this.plugin.settings.sortBy, "desc");
+					void this.setSort(effective.sortBy, "desc");
+				});
+		});
+		menu.addSeparator();
+		menu.addItem((item) => {
+			item
+				.setTitle("Use default")
+				.setDisabled(!hasOverride)
+				.onClick(() => {
+					void this.clearNoteSortOverride();
 				});
 		});
 		const rect = anchor.getBoundingClientRect();
@@ -1435,6 +1529,7 @@ export class AlternativeExplorerView extends ItemView {
 		this.plugin.settings.smartFolders = removed.smartFolders;
 		this.plugin.settings.folderSections = removed.folderSections;
 		this.plugin.settings.folderOrder = removed.folderOrder;
+		this.plugin.removeNoteSortOverrideForSmartFolder(id);
 		if (this.plugin.settings.notesScope === toSmartFolderScope(id)) {
 			this.plugin.settings.notesScope = "all";
 			this.plugin.settings.pane = "folders";
@@ -1638,7 +1733,7 @@ export class AlternativeExplorerView extends ItemView {
 		if (position === "into") return;
 
 		const targetSectionId = drop.sectionId;
-		const custom = this.plugin.settings.folderSortBy === "custom";
+		const custom = this.effectiveFolderSort(root.path).sortBy === "custom";
 
 		if (targetSectionId === UNASSIGNED_SECTION_ID) {
 			this.plugin.settings.folderSections = moveFolderToSection(
@@ -1890,9 +1985,10 @@ export class AlternativeExplorerView extends ItemView {
 		paths: readonly string[],
 		customOrder: readonly string[] | undefined
 	): string[] {
+		const { sortBy, sortDir } = this.effectiveFolderSort(this.app.vault.getRoot().path);
 		return sortFolderPaths(paths, {
-			sortBy: this.plugin.settings.folderSortBy,
-			sortDir: this.plugin.settings.folderSortDir,
+			sortBy,
+			sortDir,
 			customOrder,
 			getName: (path) => this.itemDisplayName(path),
 			getTimestamp: (path, kind) => this.getFolderTimestamp(path, kind),
@@ -1949,10 +2045,47 @@ export class AlternativeExplorerView extends ItemView {
 			.filter((child): child is TFolder => child instanceof TFolder)
 			.map((child) => child.path);
 		const smartKeys = childSmartItemKeys(this.plugin.settings.smartFolders, folder.path);
-		return mergeFolderOrder(this.plugin.settings.folderOrder[folder.path], [
-			...vaultPaths,
-			...smartKeys,
-		]);
+		const paths = [...vaultPaths, ...smartKeys];
+		const { sortBy, sortDir } = this.effectiveFolderSort(folder.path);
+		return sortFolderPaths(paths, {
+			sortBy,
+			sortDir,
+			customOrder: this.plugin.settings.folderOrder[folder.path],
+			getName: (path) => this.itemDisplayName(path),
+			getTimestamp: (path, kind) => this.getFolderTimestamp(path, kind),
+		});
+	}
+
+	private effectiveFolderSort(parentPath: string): {
+		sortBy: FolderSortBy;
+		sortDir: FolderSortDir;
+	} {
+		return resolveFolderSort(
+			{
+				sortBy: this.plugin.settings.folderSortBy,
+				sortDir: this.plugin.settings.folderSortDir,
+			},
+			this.plugin.settings.folderSortOverrides,
+			parentPath
+		);
+	}
+
+	private effectiveNoteSort(): { sortBy: NoteSortBy; sortDir: NoteSortDir } {
+		return resolveNoteSort(
+			{
+				sortBy: this.plugin.settings.sortBy,
+				sortDir: this.plugin.settings.sortDir,
+			},
+			this.plugin.settings.noteSortOverrides,
+			this.plugin.settings.notesScope
+		);
+	}
+
+	private notesFolderSortParent(): string | null {
+		const scope = this.plugin.settings.notesScope;
+		if (scope === "all" || isSmartFolderScope(scope)) return null;
+		const folder = this.app.vault.getAbstractFileByPath(scope);
+		return folder instanceof TFolder ? folder.path : null;
 	}
 
 	private parentPathOfItemKey(itemKey: string): string | null {
@@ -2207,15 +2340,20 @@ export class AlternativeExplorerView extends ItemView {
 
 			// Vault folder drag
 			if (!isRootDrag) {
-				return draggedParentPath === targetParentPath
-					? {
-							kind: "folder",
-							element: row,
-							sectionId: row.dataset.sectionId ?? UNASSIGNED_SECTION_ID,
-							folderPath: targetKey,
-							parentPath: targetParentPath,
-						}
-					: null;
+				if (draggedParentPath !== targetParentPath) return null;
+				if (
+					this.effectiveFolderSort(draggedParentPath ?? this.app.vault.getRoot().path)
+						.sortBy !== "custom"
+				) {
+					return null;
+				}
+				return {
+					kind: "folder",
+					element: row,
+					sectionId: row.dataset.sectionId ?? UNASSIGNED_SECTION_ID,
+					folderPath: targetKey,
+					parentPath: targetParentPath,
+				};
 			}
 
 			if (row.dataset.depth !== "0") return null;
@@ -2225,7 +2363,10 @@ export class AlternativeExplorerView extends ItemView {
 				findSectionIdForFolder(this.plugin.settings.folderSections, draggedKey) ??
 				UNASSIGNED_SECTION_ID;
 			const sameGroup = targetSectionId === sourceSectionId;
-			if (sameGroup && this.plugin.settings.folderSortBy !== "custom") {
+			if (
+				sameGroup &&
+				this.effectiveFolderSort(this.app.vault.getRoot().path).sortBy !== "custom"
+			) {
 				return null;
 			}
 

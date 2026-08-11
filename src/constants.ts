@@ -11,6 +11,16 @@ export type NoteGroupBy = "none" | "mtime" | "ctime";
 export type FolderSortBy = "name" | "mtime" | "ctime" | "custom";
 export type FolderSortDir = "asc" | "desc";
 
+export interface FolderSortRule {
+	sortBy: FolderSortBy;
+	sortDir: FolderSortDir;
+}
+
+export interface NoteSortRule {
+	sortBy: NoteSortBy;
+	sortDir: NoteSortDir;
+}
+
 export interface FolderSection {
 	id: string;
 	name: string;
@@ -70,9 +80,11 @@ export interface AlternativeExplorerSettings {
 	collapsedSectionIds: string[];
 	folderSortBy: FolderSortBy;
 	folderSortDir: FolderSortDir;
+	folderSortOverrides: Record<string, FolderSortRule>;
 	smartFolders: SmartFolder[];
 	sortBy: NoteSortBy;
 	sortDir: NoteSortDir;
+	noteSortOverrides: Record<string, NoteSortRule>;
 	groupBy: NoteGroupBy;
 	groupPinned: boolean;
 }
@@ -89,9 +101,11 @@ export function createDefaultSettings(rootPath: string): AlternativeExplorerSett
 		collapsedSectionIds: [],
 		folderSortBy: "custom",
 		folderSortDir: "asc",
+		folderSortOverrides: Object.create(null) as Record<string, FolderSortRule>,
 		smartFolders: [],
 		sortBy: "mtime",
 		sortDir: "desc",
+		noteSortOverrides: Object.create(null) as Record<string, NoteSortRule>,
 		groupBy: "mtime",
 		groupPinned: true,
 	};

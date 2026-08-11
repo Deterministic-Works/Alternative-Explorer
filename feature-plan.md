@@ -2,7 +2,7 @@
 
 Obsidian plugin: a calm, Apple Notes–style sidebar explorer with a single pane that switches between an expandable folder tree and a notes list.
 
-Source note: 2026-08-24; updated for expandable folder tree + note depth toggle; updated for folder sections and folder sort; updated for smart folders and reveal current note.
+Source note: 2026-08-24; updated for expandable folder tree + note depth toggle; updated for folder sections and folder sort; updated for smart folders and reveal current note; updated for settings defaults and per-folder sort overrides.
 
 ## Goals
 
@@ -14,14 +14,18 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 - Groups root folders into plugin-only sections with configurable in-section sort
 - Supports plugin-only smart folders filtered by note properties
 - Can reveal the currently open note in the explorer notes list
+- Lets users set default sort in Settings and per-folder/scope overrides in the explorer
 
 ## Features
 
 ### 1. Customizable folder order and sort
 
-- Root folders sort by **Name**, **Modified**, **Created**, or **Custom** (global rule applied inside each section and the unassigned list).
-- Custom order is changed by drag and drop and persisted across sessions.
-- Nested sibling folders keep a separate per-parent custom order via drag and drop.
+- Default folder sort (**Name**, **Modified**, **Created**, or **Custom**) lives in **Settings → Alternative Explorer**.
+- The folders header sort control sets a persisted override for vault-root children (applied inside each section and the unassigned list).
+- Opening a real folder’s notes view exposes a folder-sort control that overrides how that folder’s children are ordered.
+- Custom order is changed by drag and drop when the effective sort for that parent is **Custom**, and is persisted across sessions.
+- Nested sibling folders use the same sort modes via the parent’s override or the settings default.
+- **Use default** clears a folder’s override so the settings default applies again.
 
 ### 2. Plugin-only folder sections
 
@@ -52,8 +56,9 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 ### 5. Readable, configurable notes list
 
-- Sort controls in the notes pane: **Name**, **Modified**, or **Created**, each ascending or descending.
-- Group-by controls: **None**, **Modified**, or **Created**.
+- Default note sort (**Name**, **Modified**, or **Created**, ascending or descending) lives in **Settings → Alternative Explorer**.
+- Sort controls in the notes pane set a persisted override for the current scope (**All notes**, a folder path, or a smart folder). **Use default** clears the override.
+- Group-by controls: **None**, **Modified**, or **Created** (still global).
   - Modified/Created use recency sections: Today, Yesterday, Previous 7 Days, Previous 30 Days, older months (`MMMM YYYY`).
   - Empty sections are omitted.
 - Separate **Pinned** toggle: when on, bookmarked notes appear in a **Pinned** section first; when off, they stay in normal groups (still marked with a pin icon).
