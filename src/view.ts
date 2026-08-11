@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, Scope, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import {
 	FolderSortBy,
@@ -104,7 +104,9 @@ export class AlternativeExplorerView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.contentEl.addClass("alternative-explorer-view");
+		this.scope = new Scope(this.app.scope);
 		this.registerInteractions();
+		this.registerNoteHotkeys();
 		this.registerWorkspaceSelectionSync();
 		this.render();
 	}
@@ -1879,7 +1881,7 @@ export class AlternativeExplorerView extends ItemView {
 		if (canOpenInObsidian(this.app, file)) {
 			this.selectedFilePath = path;
 			this.applySelectionHighlight();
-			await this.openInWorkspace(file);
+			await this.openInWorkspace(file, { focusEditor: true });
 			return;
 		}
 
@@ -1893,42 +1895,70 @@ export class AlternativeExplorerView extends ItemView {
 		this.focusNoteRow(path);
 	}
 
-	private handleNoteKeydown(event: KeyboardEvent): void {
-		if (this.plugin.settings.pane !== "notes") return;
+	private registerNoteHotkeys(): void {
+		if (!this.scope) return;
 
-		const target = event.target as HTMLElement | null;
-		if (target?.closest("input, textarea, select, [contenteditable='true']")) {
+		this.scope.register([], "ArrowDown", (event) => {
+			if (!this.handleNoteArrowNavigation(1)) return;
+			event.preventDefault();
+			return false;
+		});
+		this.scope.register([], "ArrowUp", (event) => {
+			if (!this.handleNoteArrowNavigation(-1)) return;
+			event.preventDefault();
+			return false;
+		});
+		this.scope.register([], "Enter", (event) => {
+			if (!this.handleNoteEnter()) return;
+			event.preventDefault();
+			return false;
+		});
+	}
+
+	private handleNoteKeydown(event: KeyboardEvent): void {
+		const key = event.key;
+		if (key === "ArrowDown") {
+			if (!this.handleNoteArrowNavigation(1)) return;
+			event.preventDefault();
+			event.stopPropagation();
 			return;
 		}
-
-		const key = event.key;
-		if (key !== "ArrowUp" && key !== "ArrowDown" && key !== "Enter") {
+		if (key === "ArrowUp") {
+			if (!this.handleNoteArrowNavigation(-1)) return;
+			event.preventDefault();
+			event.stopPropagation();
 			return;
+		}
+		if (key === "Enter") {
+			if (!this.handleNoteEnter()) return;
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	}
+
+	/** Returns false when the event should be ignored. */
+	private handleNoteArrowNavigation(delta: 1 | -1): boolean {
+		if (this.plugin.settings.pane !== "notes") return false;
+
+		const active = document.activeElement;
+		if (
+			active instanceof HTMLElement &&
+			active.closest("input, textarea, select, [contenteditable='true']")
+		) {
+			return false;
 		}
 
 		const rows = this.getNoteRows();
-		if (rows.length === 0) return;
+		if (rows.length === 0) return false;
 
-		if (key === "Enter") {
-			const focusedRow = target?.closest<HTMLButtonElement>(
-				"button.alternative-explorer-file-row[data-file-path]"
-			);
-			const path = focusedRow?.dataset.filePath;
-			if (!path) return;
-			event.preventDefault();
-			void this.confirmOpenNote(path);
-			return;
-		}
-
-		event.preventDefault();
 		const currentIndex = this.resolveNoteRowIndex(rows);
 		const nextIndex =
-			key === "ArrowDown"
-				? Math.min(currentIndex + 1, rows.length - 1)
+			delta > 0
+				? Math.min((currentIndex < 0 ? -1 : currentIndex) + 1, rows.length - 1)
 				: Math.max(currentIndex < 0 ? rows.length - 1 : currentIndex - 1, 0);
 		const nextRow = rows[nextIndex];
 		const nextPath = nextRow?.dataset.filePath;
-		if (!nextPath) return;
+		if (!nextPath || !nextRow) return false;
 
 		this.selectedFilePath = nextPath;
 		this.applySelectionHighlight();
@@ -1937,34 +1967,75 @@ export class AlternativeExplorerView extends ItemView {
 
 		const file = this.app.vault.getAbstractFileByPath(nextPath);
 		if (file instanceof TFile && canOpenInObsidian(this.app, file)) {
-			void this.openInWorkspace(file);
+			void this.openInWorkspace(file, { focusEditor: false });
 		}
+		return true;
 	}
 
-	private async confirmOpenNote(path: string): Promise<void> {
+	/** Returns false when the event should be ignored. */
+	private handleNoteEnter(): boolean {
+		if (this.plugin.settings.pane !== "notes") return false;
+
+		const active = document.activeElement;
+		if (
+			active instanceof HTMLElement &&
+			active.closest("input, textarea, select, [contenteditable='true']")
+		) {
+			return false;
+		}
+
+		const focusedRow =
+			active instanceof HTMLElement
+				? active.closest<HTMLButtonElement>(
+						"button.alternative-explorer-file-row[data-file-path]"
+					)
+				: null;
+		const path = focusedRow?.dataset.filePath ?? this.selectedFilePath;
+		if (!path) return false;
+
+		void this.confirmOpenNote(path, { focusEditor: true });
+		return true;
+	}
+
+	private async confirmOpenNote(
+		path: string,
+		options: { focusEditor: boolean } = { focusEditor: true }
+	): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
 
 		this.selectedFilePath = path;
 		this.applySelectionHighlight();
 		if (canOpenInObsidian(this.app, file)) {
-			await this.openInWorkspace(file);
+			await this.openInWorkspace(file, options);
 			return;
 		}
 		openWithDefaultApp(this.app, path);
 	}
 
-	private async openInWorkspace(file: TFile): Promise<void> {
+	private async openInWorkspace(
+		file: TFile,
+		options: { focusEditor: boolean } = { focusEditor: true }
+	): Promise<void> {
 		const leaf = this.resolveLeafForOpen();
-		await leaf.openFile(file);
+		await leaf.openFile(file, { active: options.focusEditor });
+		if (!options.focusEditor) {
+			this.app.workspace.setActiveLeaf(this.leaf, { focus: true });
+			this.focusNoteRow(file.path);
+		}
 	}
 
 	private resolveLeafForOpen(): WorkspaceLeaf {
-		const current = this.app.workspace.getMostRecentLeaf();
-		if (current?.getViewState().pinned) {
+		const current =
+			this.app.workspace.getMostRecentLeaf(this.app.workspace.rootSplit) ??
+			this.app.workspace.getLeaf(false);
+		if (current === this.leaf) {
 			return this.app.workspace.getLeaf(true);
 		}
-		return this.app.workspace.getLeaf(false);
+		if (current.getViewState().pinned) {
+			return this.app.workspace.getLeaf(true);
+		}
+		return current;
 	}
 
 	private registerWorkspaceSelectionSync(): void {
