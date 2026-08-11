@@ -43,6 +43,7 @@ Do not edit the generated `main.js` directly.
 |------|------|
 | `feature-plan.md` | Intended product features and interaction model (pre-implementation) |
 | `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
+| `src/create-paths.ts` | Pure helpers for unique note/folder vault paths |
 | `src/view.ts` | Sidebar folders/notes pane switching and note rows |
 | `src/note-groups.ts` | Pure pinned/recency grouping for the notes list |
 | `src/bookmarks.ts` | Core Bookmarks plugin file-path reader |

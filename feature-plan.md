@@ -85,7 +85,15 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 - Scrolls to the note row and briefly highlights it.
 - Shows a notice when there is no active note, or when the note is not present in the resulting list.
 
-### 8. Sidebar presentation
+### 8. Create note and folder
+
+- Dedicated create row **one row above** the title/controls header on both panes.
+- Folders pane: **New note** and **New folder** create at the vault root.
+- Notes pane: **New note** always; **New folder** when viewing **All notes** or a real folder (hidden on smart folders).
+- New note creates `Untitled.md` (or the next free `Untitled N.md`), opens it in the editor, and from the folders pane switches into that folder’s notes list.
+- New folder prompts for a name (default `Untitled`) and creates under the current target parent (vault root from the folders pane / All notes; the open folder from a folder notes list).
+
+### 9. Sidebar presentation
 
 - Opens in the left sidebar by default.
 - Visuals inherit the active Obsidian theme: transparent pane background, `--nav-item-*` colors/hover/active states, no plugin-owned surface colors.
@@ -94,9 +102,9 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 ## Interaction model (summary)
 
-1. Folders pane: All notes + unassigned root folders/smart folders + named sections; Reveal / New smart folder / New section / Sort in header; drag to reorder (custom) or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
+1. Folders pane: All notes + unassigned root folders/smart folders + named sections; New note / New folder on a row above the title; Reveal / New smart folder / New section / Sort on the title row; drag to reorder (custom) or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
 2. Chevron → expand/collapse folder or section; folder body → notes pane for that folder; smart folder → filtered notes pane.
-3. Notes pane: Back → folders; Reveal current note; icon depth toggle (This folder / All below) for real folders; right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
+3. Notes pane: Back → folders; New note / New folder (hidden on smart folders) on a row above the title; Reveal current note; icon depth toggle (This folder / All below) for real folders; right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
 4. Smart folder context menu → Edit rules / Rename / Move (section or root) / Delete.
 
 ## Out of scope (for now)
@@ -104,7 +112,7 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 The initial implementation leaves these for later:
 
 - Search
-- File operations (rename, move, delete, new note)
+- File operations beyond create (rename, move, delete)
 - Replacing Obsidian’s built-in explorer (the initial view coexists with it)
 - Mobile-specific interactions beyond responsive sidebar density
 - Nesting smart folders under other smart folders
