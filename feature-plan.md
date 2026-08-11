@@ -106,10 +106,11 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 ## Interaction model (summary)
 
-1. Folders pane: All notes + unassigned root folders/smart folders + named sections; Reveal / New note / New folder / New smart folder / New section / Sort in header; drag to reorder (custom) or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
+1. Folders pane: All notes + unassigned root folders/smart folders + named sections; Reveal / New note / New folder / New smart folder / New section / Sort in header (root folder-sort override); drag to reorder when effective sort is Custom, or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
 2. Chevron → expand/collapse folder or section; folder body → notes pane for that folder; smart folder → filtered notes pane.
-3. Notes pane: Back → folders; Reveal current note; New note; New folder (hidden on smart folders); icon depth toggle (This folder / All below) for real folders; right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
-4. Smart folder context menu → Edit rules / Rename / Move (section or root) / Delete.
+3. Notes pane: Back → folders; Reveal current note; New note; New folder (hidden on smart folders); icon depth toggle (This folder / All below) for real folders; folder-sort control (real folders) plus note Sort / Group / Pinned; Sort writes a per-scope override with Use default; tap note → editor; right-click note → Pin/Unpin.
+4. Settings → Alternative Explorer: default folder sort and default note sort.
+5. Smart folder context menu → Edit rules / Rename / Move (section or root) / Delete.
 
 ## Out of scope (for now)
 
