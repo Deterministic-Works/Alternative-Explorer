@@ -18,7 +18,7 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - Drag sibling folder rows to save a custom order across sessions (when folder sort is **Custom**, or for nested siblings).
 - Create **smart folders** that look like folders but list notes matching property rules (frontmatter, tags, name, path, created, modified, pinned), including relative date filters such as today or last 7 days. Drag them among real folders, into a folder to nest, or between sections.
 - Use **Reveal current note** in the folders or notes header to jump to the active note in its folder list.
-- Create notes and folders from a create row above the title controls: **New note** / **New folder** on the folders pane (vault root), and on the notes pane for the open folder (**New folder** is hidden on smart folders).
+- Create notes and folders from header buttons: **New note** / **New folder** on the folders pane (vault root), and on the notes pane for the open folder (**New folder** is hidden on smart folders).
 
 ## Use
 
