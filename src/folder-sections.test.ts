@@ -8,6 +8,7 @@ import {
 	partitionRootFolders,
 	pruneFolderSections,
 	remapFolderSections,
+	removeFolderFromSections,
 	reorderSections,
 	sortFolderPaths,
 } from "./folder-sections";
@@ -25,6 +26,29 @@ describe("partitionRootFolders", () => {
 		expect(result.unassigned).toEqual(["Inbox", "Archive"]);
 		expect(result.sections[0]?.folderPaths).toEqual(["Projects"]);
 		expect(result.sections[1]?.folderPaths).toEqual(["Journal"]);
+	});
+
+	it("filters missing paths for display without mutating the saved sections input", () => {
+		const sections = [
+			{ id: "a", name: "Work", folderPaths: ["Projects", "Gone"] },
+			{ id: "b", name: "Life", folderPaths: ["Journal"] },
+		];
+		const original = structuredClone(sections);
+		partitionRootFolders(["Projects", "Journal"], sections);
+		expect(sections).toEqual(original);
+	});
+});
+
+describe("removeFolderFromSections", () => {
+	it("removes only the deleted path from section membership", () => {
+		const sections = [
+			{ id: "a", name: "Work", folderPaths: ["Projects", "Inbox"] },
+			{ id: "b", name: "Life", folderPaths: ["Journal", "Projects"] },
+		];
+		const next = removeFolderFromSections(sections, "Projects");
+		expect(next[0]?.folderPaths).toEqual(["Inbox"]);
+		expect(next[1]?.folderPaths).toEqual(["Journal"]);
+		expect(sections[0]?.folderPaths).toEqual(["Projects", "Inbox"]);
 	});
 });
 

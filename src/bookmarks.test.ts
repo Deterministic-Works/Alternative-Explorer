@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	addRootFileBookmark,
+	bookmarkPathsFingerprint,
 	bookmarkTreeHasFile,
 	collectBookmarkedFilePaths,
 	removeFileBookmarks,
+	wrapBookmarksRequestSave,
 	type BookmarkItem,
+	type BookmarksPluginInstance,
 } from "./bookmarks";
 
 describe("collectBookmarkedFilePaths", () => {
@@ -27,6 +30,49 @@ describe("collectBookmarkedFilePaths", () => {
 		]);
 
 		expect(Array.from(paths).sort()).toEqual(["Inbox/a.md", "Pinned/b.md", "Pinned/c.md"]);
+	});
+});
+
+describe("bookmarkPathsFingerprint", () => {
+	it("is order-independent and stable for the same set", () => {
+		expect(bookmarkPathsFingerprint(new Set(["b.md", "a.md"]))).toBe(
+			bookmarkPathsFingerprint(new Set(["a.md", "b.md"]))
+		);
+		expect(bookmarkPathsFingerprint(new Set(["a.md"]))).not.toBe(
+			bookmarkPathsFingerprint(new Set(["a.md", "b.md"]))
+		);
+	});
+});
+
+describe("wrapBookmarksRequestSave", () => {
+	it("notifies on requestSave and restores the original on unsubscribe", () => {
+		const original = vi.fn();
+		const instance: BookmarksPluginInstance = { items: [], requestSave: original };
+		const onChange = vi.fn();
+
+		const unsubscribe = wrapBookmarksRequestSave(instance, onChange);
+		instance.requestSave?.();
+
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(original).toHaveBeenCalledTimes(1);
+
+		unsubscribe();
+		instance.requestSave?.();
+		expect(onChange).toHaveBeenCalledTimes(1);
+		expect(original).toHaveBeenCalledTimes(2);
+	});
+
+	it("removes requestSave when none existed before wrapping", () => {
+		const instance: BookmarksPluginInstance = { items: [] };
+		const onChange = vi.fn();
+		const unsubscribe = wrapBookmarksRequestSave(instance, onChange);
+
+		expect(typeof instance.requestSave).toBe("function");
+		instance.requestSave?.();
+		expect(onChange).toHaveBeenCalledTimes(1);
+
+		unsubscribe();
+		expect(instance.requestSave).toBeUndefined();
 	});
 });
 

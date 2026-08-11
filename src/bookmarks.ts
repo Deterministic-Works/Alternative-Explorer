@@ -11,7 +11,7 @@ export type BookmarkItem = {
 
 export type PinToggleResult = "pinned" | "unpinned";
 
-interface BookmarksPluginInstance {
+export interface BookmarksPluginInstance {
 	items?: BookmarkItem[];
 	getBookmarks?: () => unknown;
 	requestSave?: () => void;
@@ -35,7 +35,7 @@ function collectFilePaths(items: readonly unknown[], into: Set<string>): void {
 	}
 }
 
-function getBookmarksPluginInstance(app: App): BookmarksPluginInstance | null {
+export function getBookmarksPluginInstance(app: App): BookmarksPluginInstance | null {
 	const internalPlugins = (app as App & {
 		internalPlugins?: {
 			getEnabledPluginById?: (id: string) => unknown;
@@ -61,7 +61,10 @@ function getBookmarksPluginInstance(app: App): BookmarksPluginInstance | null {
 	}
 
 	const plugin = internalPlugins.plugins?.bookmarks;
-	if (plugin?.instance && (Array.isArray(plugin.instance.items) || typeof plugin.instance.getBookmarks === "function")) {
+	if (
+		plugin?.instance &&
+		(Array.isArray(plugin.instance.items) || typeof plugin.instance.getBookmarks === "function")
+	) {
 		return plugin.instance;
 	}
 
@@ -91,6 +94,51 @@ export function getBookmarkedFilePaths(app: App): Set<string> {
 		return new Set();
 	}
 	return paths;
+}
+
+/** Stable fingerprint for comparing bookmarked path sets. */
+export function bookmarkPathsFingerprint(paths: ReadonlySet<string>): string {
+	return Array.from(paths).sort().join("\0");
+}
+
+/**
+ * Wraps `requestSave` so Bookmarks mutations notify listeners.
+ * Returns an unsubscribe that restores the previous `requestSave`.
+ */
+export function wrapBookmarksRequestSave(
+	instance: BookmarksPluginInstance,
+	onChange: () => void
+): () => void {
+	const previous = instance.requestSave;
+	const boundPrevious =
+		typeof previous === "function" ? previous.bind(instance) : undefined;
+
+	instance.requestSave = () => {
+		onChange();
+		boundPrevious?.();
+	};
+
+	return () => {
+		if (instance.requestSave !== undefined && boundPrevious) {
+			instance.requestSave = boundPrevious;
+		} else if (previous === undefined) {
+			delete instance.requestSave;
+		} else {
+			instance.requestSave = previous;
+		}
+	};
+}
+
+/**
+ * Subscribes to Bookmarks persistence via `requestSave`.
+ * Returns unsubscribe, or null when Bookmarks is unavailable.
+ */
+export function subscribeBookmarksChange(app: App, onChange: () => void): (() => void) | null {
+	const instance = getBookmarksPluginInstance(app);
+	if (!instance) {
+		return null;
+	}
+	return wrapBookmarksRequestSave(instance, onChange);
 }
 
 /** Pure helper for tests: flatten nested bookmark-like items to file paths. */
