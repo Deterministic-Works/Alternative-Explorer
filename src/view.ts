@@ -805,13 +805,17 @@ export class AlternativeExplorerView extends ItemView {
 		for (const group of groups) {
 			const section = container.createEl("section", {
 				cls: "alternative-explorer-section alternative-explorer-file-section",
-				attr: { "aria-label": group.label },
 			});
 			const showHeader = !(group.id === "all" && groups.length === 1);
 			if (showHeader) {
+				const headingId = `alternative-explorer-group-${group.id}`;
+				section.setAttr("aria-labelledby", headingId);
 				const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
 				const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-				label.createEl("h2", { text: group.label });
+				label.createEl("h2", {
+					text: group.label,
+					attr: { id: headingId },
+				});
 				label.createSpan({
 					text: String(group.notes.length),
 					attr: {
