@@ -862,10 +862,11 @@ export class AlternativeExplorerView extends ItemView {
 
 	private renderNotesSubfoldersSection(container: HTMLElement, childKeys: string[]): void {
 		const collapsed = this.plugin.settings.notesSubfoldersCollapsed;
+		const headingId = "alternative-explorer-notes-folders-heading";
 		const section = container.createEl("section", {
 			cls: "alternative-explorer-section alternative-explorer-notes-folders-section",
-			attr: { "aria-label": "Folders" },
 		});
+		section.setAttr("aria-labelledby", headingId);
 
 		const sectionHeader = section.createDiv({
 			cls: `alternative-explorer-section-header alternative-explorer-notes-folders-header${
@@ -873,7 +874,10 @@ export class AlternativeExplorerView extends ItemView {
 			}`,
 		});
 		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-		label.createEl("h2", { text: "Folders" });
+		label.createEl("h2", {
+			text: "Folders",
+			attr: { id: headingId },
+		});
 		label.createSpan({
 			text: String(childKeys.length),
 			attr: {
