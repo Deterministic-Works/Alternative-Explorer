@@ -20,7 +20,7 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 - Use **Reveal current note** in the folders or notes header to jump to the active note in its folder list.
 - Create notes and folders from header buttons: **New note** / **New folder** on the folders pane (vault root), and on the notes pane for the open folder (**New folder** is hidden on smart folders).
 - Note rows use file-type icons (markdown, images, PDF, canvas, and more).
-- With the notes list focused, **Up** / **Down** moves between notes. Obsidian-supported files open immediately in the current tab (or a new tab if that tab is pinned). Unsupported files are highlighted only until you press **Enter** or click them a second time (opens with the system default app). Click the explorer pane first so it has focus for keyboard navigation.
+- With the notes list focused, **Up** / **Down** moves between notes. Obsidian-supported files open immediately in the current tab (or a new tab if that tab is pinned). Unsupported files are highlighted only until you press **Enter** or click them a second time (opens with the system default app). Clicking a note keeps focus in the explorer so keyboard navigation continues.
 
 ## Use
 

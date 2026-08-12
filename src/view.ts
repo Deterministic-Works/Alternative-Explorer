@@ -1881,7 +1881,8 @@ export class AlternativeExplorerView extends ItemView {
 		if (canOpenInObsidian(this.app, file)) {
 			this.selectedFilePath = path;
 			this.applySelectionHighlight();
-			await this.openInWorkspace(file, { focusEditor: true });
+			// Keep explorer focused so Up/Down navigation continues after click.
+			await this.openInWorkspace(file, { focusEditor: false });
 			return;
 		}
 
@@ -2018,10 +2019,13 @@ export class AlternativeExplorerView extends ItemView {
 		options: { focusEditor: boolean } = { focusEditor: true }
 	): Promise<void> {
 		const leaf = this.resolveLeafForOpen();
-		await leaf.openFile(file, { active: options.focusEditor });
+		await leaf.openFile(file, { active: true });
 		if (!options.focusEditor) {
-			this.app.workspace.setActiveLeaf(this.leaf, { focus: true });
-			this.focusNoteRow(file.path);
+			// openFile may focus the editor asynchronously; reclaim explorer focus after.
+			window.setTimeout(() => {
+				this.app.workspace.setActiveLeaf(this.leaf, { focus: true });
+				this.focusNoteRow(file.path);
+			}, 0);
 		}
 	}
 
