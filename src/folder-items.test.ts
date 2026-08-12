@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createSmartFolder } from "./smart-folders";
 import {
 	childSmartItemKeys,
+	collectExpandableFolderPaths,
 	effectiveSmartParentPath,
 	placeItemInParentOrder,
 	pruneMissingSmartParents,
@@ -73,5 +74,31 @@ describe("order placement", () => {
 		expect(result.folderSections[0]?.folderPaths).toEqual(["Inbox"]);
 		expect(result.folderOrder["/"]).toEqual([]);
 		expect(removeItemFromAllOrders(result.folderOrder, "smart:b").Projects).toEqual(["Notes"]);
+	});
+});
+
+describe("collectExpandableFolderPaths", () => {
+	it("returns only folders that have vault subfolders", () => {
+		expect(
+			collectExpandableFolderPaths([
+				{ path: "Inbox", children: [] },
+				{
+					path: "Projects",
+					children: [
+						{ path: "Projects/App", children: [{ path: "Projects/App/Notes", children: [] }] },
+						{ path: "Projects/Docs", children: [] },
+					],
+				},
+			])
+		).toEqual(["Projects", "Projects/App"]);
+	});
+
+	it("returns an empty list when nothing is nested", () => {
+		expect(
+			collectExpandableFolderPaths([
+				{ path: "A", children: [] },
+				{ path: "B", children: [] },
+			])
+		).toEqual([]);
 	});
 });

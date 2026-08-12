@@ -16,7 +16,9 @@ import { getBookmarkedFilePaths, toggleFileBookmark } from "./bookmarks";
 import { mergeFolderOrder, moveFolderRelative } from "./folder-order";
 import {
 	childSmartItemKeys,
+	collectExpandableFolderPaths,
 	effectiveSmartParentPath,
+	ExpandableFolderNode,
 	isSmartItemKey,
 	placeItemInParentOrder,
 	removeSmartFolderPlacement,
@@ -221,6 +223,15 @@ export class AlternativeExplorerView extends ItemView {
 			if (revealControl) {
 				event.preventDefault();
 				void this.revealCurrentNote();
+				return;
+			}
+
+			const expandFoldAllControl = element.closest<HTMLButtonElement>(
+				"button[data-expand-fold-all]"
+			);
+			if (expandFoldAllControl) {
+				event.preventDefault();
+				void this.toggleExpandFoldAll();
 				return;
 			}
 
@@ -463,6 +474,7 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		this.renderRevealButton(controls);
+		this.renderExpandFoldAllButton(controls);
 		this.renderNewNoteButton(controls);
 		this.renderNewFolderButton(controls);
 
@@ -501,6 +513,21 @@ export class AlternativeExplorerView extends ItemView {
 			},
 		});
 		setIcon(sortButton, folderSortDir === "asc" ? "arrow-up-narrow-wide" : "arrow-down-wide-narrow");
+	}
+
+	private renderExpandFoldAllButton(controls: HTMLElement): void {
+		const anyExpanded = this.plugin.settings.expandedFolders.length > 0;
+		const label = anyExpanded ? "Fold all" : "Expand all";
+		const button = controls.createEl("button", {
+			cls: "alternative-explorer-control-button",
+			attr: {
+				type: "button",
+				"data-expand-fold-all": "true",
+				"aria-label": label,
+				title: label,
+			},
+		});
+		setIcon(button, anyExpanded ? "chevrons-down-up" : "chevrons-up-down");
 	}
 
 	private renderRevealButton(controls: HTMLElement): void {
@@ -2311,6 +2338,29 @@ export class AlternativeExplorerView extends ItemView {
 		} else {
 			expanded.push(path);
 		}
+	}
+
+	private async toggleExpandFoldAll(): Promise<void> {
+		if (this.plugin.settings.expandedFolders.length > 0) {
+			this.plugin.settings.expandedFolders = [];
+		} else {
+			const root = this.app.vault.getRoot();
+			const nodes = root.children
+				.filter((child): child is TFolder => child instanceof TFolder)
+				.map((folder) => this.toExpandableFolderNode(folder));
+			this.plugin.settings.expandedFolders = collectExpandableFolderPaths(nodes);
+		}
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private toExpandableFolderNode(folder: TFolder): ExpandableFolderNode {
+		return {
+			path: folder.path,
+			children: folder.children
+				.filter((child): child is TFolder => child instanceof TFolder)
+				.map((child) => this.toExpandableFolderNode(child)),
+		};
 	}
 
 	private sortRootFolderPaths(

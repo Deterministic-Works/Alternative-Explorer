@@ -134,3 +134,31 @@ export function removeSmartFolderPlacement(
 		folderOrder: removeItemFromAllOrders(folderOrder, key),
 	};
 }
+
+/** Folder-only tree node used when collecting expandable vault paths. */
+export type ExpandableFolderNode = {
+	path: string;
+	children: readonly ExpandableFolderNode[];
+};
+
+/**
+ * Returns every folder path that has at least one vault subfolder
+ * (paths that show an expand chevron for nested vault folders).
+ */
+export function collectExpandableFolderPaths(
+	nodes: readonly ExpandableFolderNode[]
+): string[] {
+	const paths: string[] = [];
+	const visit = (node: ExpandableFolderNode): void => {
+		if (node.children.length > 0) {
+			paths.push(node.path);
+		}
+		for (const child of node.children) {
+			visit(child);
+		}
+	};
+	for (const node of nodes) {
+		visit(node);
+	}
+	return paths;
+}

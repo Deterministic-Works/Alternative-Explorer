@@ -35,6 +35,7 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 - The folders pane always lists the vault from the root as a tree.
 - **All notes** appears first; vault folders and smart folders follow (unassigned, then sections).
 - Chevron expands/collapses subfolders inline in the same list (persisted).
+- Folders header **Expand all** / **Fold all** expands every vault folder that has subfolders, or clears all expansion (persisted).
 - Tapping a folder (at any depth) opens that folder’s notes list in the same pane.
 - The notes list shows immediate subfolders (and nested smart folders) in a **Folders** block above the notes; tapping a subfolder drills into it. The block is collapsible.
 - Back from the notes pane returns to the folders pane (tree expansion state preserved).
