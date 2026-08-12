@@ -516,7 +516,7 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private renderExpandFoldAllButton(controls: HTMLElement): void {
-		const anyExpanded = this.plugin.settings.expandedFolders.length > 0;
+		const anyExpanded = this.isAnyTreeOrSectionExpanded();
 		const label = anyExpanded ? "Fold all" : "Expand all";
 		const button = controls.createEl("button", {
 			cls: "alternative-explorer-control-button",
@@ -2341,17 +2341,29 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private async toggleExpandFoldAll(): Promise<void> {
-		if (this.plugin.settings.expandedFolders.length > 0) {
+		if (this.isAnyTreeOrSectionExpanded()) {
 			this.plugin.settings.expandedFolders = [];
+			this.plugin.settings.collapsedSectionIds = this.plugin.settings.folderSections.map(
+				(section) => section.id
+			);
 		} else {
 			const root = this.app.vault.getRoot();
 			const nodes = root.children
 				.filter((child): child is TFolder => child instanceof TFolder)
 				.map((folder) => this.toExpandableFolderNode(folder));
 			this.plugin.settings.expandedFolders = collectExpandableFolderPaths(nodes);
+			this.plugin.settings.collapsedSectionIds = [];
 		}
 		await this.plugin.saveSettings();
 		this.render();
+	}
+
+	private isAnyTreeOrSectionExpanded(): boolean {
+		if (this.plugin.settings.expandedFolders.length > 0) return true;
+		const collapsed = this.plugin.settings.collapsedSectionIds;
+		return this.plugin.settings.folderSections.some(
+			(section) => !collapsed.includes(section.id)
+		);
 	}
 
 	private toExpandableFolderNode(folder: TFolder): ExpandableFolderNode {
