@@ -101,6 +101,10 @@ export default class AlternativeExplorerPlugin extends Plugin {
 			groupBy: this.parseGroupBy(saved?.groupBy),
 			groupPinned:
 				typeof saved?.groupPinned === "boolean" ? saved.groupPinned : defaults.groupPinned,
+			notesSubfoldersCollapsed:
+				typeof saved?.notesSubfoldersCollapsed === "boolean"
+					? saved.notesSubfoldersCollapsed
+					: defaults.notesSubfoldersCollapsed,
 		};
 		this.ensureCurrentFolderExists();
 		this.ensureNotesScopeExists();

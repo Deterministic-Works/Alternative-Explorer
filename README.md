@@ -6,6 +6,7 @@ Alternative Explorer is an Obsidian plugin for browsing a vault in an Apple Note
 
 - Open in the left sidebar from the ribbon or **Alternative Explorer: Open explorer view**.
 - Browse an expandable folder tree; chevron expands nested folders inline, and tapping a folder opens its notes.
+- On a folder’s notes list, immediate subfolders appear in a **Folders** section above the notes (collapsible); tapping a subfolder opens that folder.
 - Group root folders into plugin-only sections (not vault folders). Unassigned folders and smart folders stay in a loose list; sections are foldable and ordered by drag.
 - Sort root folders by **Name**, **Modified**, **Created**, or **Custom** from the folders header (sort applies inside each section and the unassigned list).
 - Create sections from the folders header; right-click a root folder or smart folder to move it between sections, or drag it onto a section.

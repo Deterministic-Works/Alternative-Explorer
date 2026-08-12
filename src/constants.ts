@@ -75,6 +75,8 @@ export interface AlternativeExplorerSettings {
 	sortDir: NoteSortDir;
 	groupBy: NoteGroupBy;
 	groupPinned: boolean;
+	/** When true, the Folders block atop a folder's notes list is collapsed. */
+	notesSubfoldersCollapsed: boolean;
 }
 
 export function createDefaultSettings(rootPath: string): AlternativeExplorerSettings {
@@ -94,6 +96,7 @@ export function createDefaultSettings(rootPath: string): AlternativeExplorerSett
 		sortDir: "desc",
 		groupBy: "mtime",
 		groupPinned: true,
+		notesSubfoldersCollapsed: false,
 	};
 }
 

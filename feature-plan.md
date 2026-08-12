@@ -36,6 +36,7 @@ Replace (or sit beside) the default file explorer with a left-sidebar view that:
 - **All notes** appears first; vault folders and smart folders follow (unassigned, then sections).
 - Chevron expands/collapses subfolders inline in the same list (persisted).
 - Tapping a folder (at any depth) opens that folder’s notes list in the same pane.
+- The notes list shows immediate subfolders (and nested smart folders) in a **Folders** block above the notes; tapping a subfolder drills into it. The block is collapsible.
 - Back from the notes pane returns to the folders pane (tree expansion state preserved).
 
 ### 4. Note depth toggle
@@ -103,7 +104,7 @@ When viewing a folder’s notes, an icon toggle next to the title chooses depth:
 
 1. Folders pane: All notes + unassigned root folders/smart folders + named sections; Reveal / New note / New folder / New smart folder / New section / Sort in header; drag to reorder (custom) or reassign; drag smart folders among real folders or into a folder to nest; drag section headers to reorder sections.
 2. Chevron → expand/collapse folder or section; folder body → notes pane for that folder; smart folder → filtered notes pane.
-3. Notes pane: Back → folders; Reveal current note; New note; New folder (hidden on smart folders); icon depth toggle (This folder / All below) for real folders; right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
+3. Notes pane: Back → folders; Reveal current note; New note; New folder (hidden on smart folders); icon depth toggle (This folder / All below) for real folders; **Folders** block of immediate subfolders above notes (collapsible); right-aligned Sort / Group / Pinned; tap note → editor; right-click note → Pin/Unpin.
 4. Smart folder context menu → Edit rules / Rename / Move (section or root) / Delete.
 
 ## Out of scope (for now)

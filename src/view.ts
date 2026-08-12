@@ -43,7 +43,12 @@ import { ConfirmModal } from "./confirm-modal";
 import { SmartFolderModal } from "./smart-folder-modal";
 import { noteMatchesSmartFolder, type SmartFolderNoteSnapshot } from "./smart-folders";
 
-type FolderAction = "select" | "toggle" | "back-to-folders" | "toggle-section";
+type FolderAction =
+	| "select"
+	| "toggle"
+	| "back-to-folders"
+	| "toggle-section"
+	| "toggle-notes-subfolders";
 
 type DropPosition = "before" | "after" | "into";
 
@@ -142,6 +147,10 @@ export class AlternativeExplorerView extends ItemView {
 				}
 				if (action === "toggle-section" && sectionId) {
 					void this.toggleSectionCollapsed(sectionId);
+					return;
+				}
+				if (action === "toggle-notes-subfolders") {
+					void this.toggleNotesSubfoldersCollapsed();
 					return;
 				}
 				if (path) {
@@ -759,6 +768,11 @@ export class AlternativeExplorerView extends ItemView {
 		const title = this.notesTitle();
 		this.renderNotesHeader(container, title);
 
+		const subfolderKeys = this.getNotesPaneSubfolderKeys();
+		if (subfolderKeys.length > 0) {
+			this.renderNotesSubfoldersSection(container, subfolderKeys);
+		}
+
 		const files = this.getNotesForScope();
 		const pinnedPaths = getBookmarkedFilePaths(this.app);
 		const { sortBy, sortDir, groupBy, groupPinned } = this.plugin.settings;
@@ -780,6 +794,9 @@ export class AlternativeExplorerView extends ItemView {
 		);
 
 		if (groups.length === 0) {
+			if (subfolderKeys.length > 0) {
+				return;
+			}
 			const empty = container.createDiv({ cls: "alternative-explorer-empty" });
 			const icon = empty.createSpan();
 			setIcon(icon, "file-text");
@@ -813,6 +830,135 @@ export class AlternativeExplorerView extends ItemView {
 				this.renderNoteRow(list, entry.file, pinnedPaths.has(entry.path));
 			}
 		}
+	}
+
+	private getNotesPaneSubfolderKeys(): string[] {
+		const scope = this.plugin.settings.notesScope;
+		if (scope === "all" || isSmartFolderScope(scope)) {
+			return [];
+		}
+		const folder = this.app.vault.getAbstractFileByPath(scope);
+		if (!(folder instanceof TFolder)) {
+			return [];
+		}
+		return this.getOrderedChildKeys(folder);
+	}
+
+	private renderNotesSubfoldersSection(container: HTMLElement, childKeys: string[]): void {
+		const collapsed = this.plugin.settings.notesSubfoldersCollapsed;
+		const section = container.createEl("section", {
+			cls: "alternative-explorer-section alternative-explorer-notes-folders-section",
+			attr: { "aria-label": "Folders" },
+		});
+
+		const sectionHeader = section.createDiv({
+			cls: `alternative-explorer-section-header alternative-explorer-notes-folders-header${
+				collapsed ? "" : " is-expanded"
+			}`,
+		});
+		const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
+		label.createEl("h2", { text: "Folders" });
+		label.createSpan({
+			text: String(childKeys.length),
+			attr: {
+				"aria-label": `${childKeys.length} ${childKeys.length === 1 ? "folder" : "folders"}`,
+			},
+		});
+
+		const toggle = sectionHeader.createEl("button", {
+			cls: `alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
+			attr: {
+				type: "button",
+				"data-folder-action": "toggle-notes-subfolders",
+				"aria-expanded": String(!collapsed),
+				"aria-label": collapsed ? "Expand folders" : "Collapse folders",
+				title: collapsed ? "Expand folders" : "Collapse folders",
+			},
+		});
+		setIcon(toggle, "chevron-right");
+
+		if (collapsed) {
+			return;
+		}
+
+		const list = section.createDiv({
+			cls: "alternative-explorer-file-list alternative-explorer-notes-folders-list",
+		});
+		const parentPath = this.plugin.settings.notesScope;
+		for (const childKey of childKeys) {
+			this.renderNotesSubfolderRow(list, childKey, parentPath);
+		}
+	}
+
+	private renderNotesSubfolderRow(
+		list: HTMLElement,
+		itemKey: string,
+		parentPath: string
+	): void {
+		if (isSmartItemKey(itemKey)) {
+			const id = smartIdFromItemKey(itemKey);
+			const smartFolder = id
+				? this.plugin.settings.smartFolders.find((folder) => folder.id === id)
+				: undefined;
+			if (!smartFolder) return;
+
+			const row = list.createEl("button", {
+				cls: "alternative-explorer-notes-folder-row",
+				attr: {
+					type: "button",
+					"data-open-smart-folder": smartFolder.id,
+					title: smartFolder.name,
+				},
+			});
+			const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
+			setIcon(icon, "sparkles");
+			row.createSpan({
+				cls: "alternative-explorer-folder-name",
+				text: smartFolder.name,
+			});
+			row.createSpan({
+				cls: "alternative-explorer-notes-folder-count",
+				text: this.smartFolderNoteCountLabel(smartFolder),
+			});
+			const arrow = row.createSpan({ cls: "alternative-explorer-row-arrow" });
+			setIcon(arrow, "chevron-right");
+			return;
+		}
+
+		const folder = this.app.vault.getAbstractFileByPath(itemKey);
+		if (!(folder instanceof TFolder)) return;
+
+		const row = list.createEl("button", {
+			cls: "alternative-explorer-notes-folder-row",
+			attr: {
+				type: "button",
+				"data-folder-action": "select",
+				"data-folder-path": folder.path,
+				"data-parent-path": parentPath,
+				title: folder.path,
+			},
+		});
+		const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
+		setIcon(icon, "folder");
+		row.createSpan({
+			cls: "alternative-explorer-folder-name",
+			text: folder.name,
+		});
+		row.createSpan({
+			cls: "alternative-explorer-notes-folder-count",
+			text: this.folderNoteCountLabel(folder),
+		});
+		const arrow = row.createSpan({ cls: "alternative-explorer-row-arrow" });
+		setIcon(arrow, "chevron-right");
+	}
+
+	private folderNoteCountLabel(folder: TFolder): string {
+		const count = this.getFiles(folder, true).length;
+		return String(count);
+	}
+
+	private smartFolderNoteCountLabel(smartFolder: SmartFolder): string {
+		return String(this.countSmartFolderNotes(smartFolder));
 	}
 
 	private renderNotesHeader(container: HTMLElement, title: string): void {
@@ -979,6 +1125,13 @@ export class AlternativeExplorerView extends ItemView {
 		} else {
 			collapsed.push(sectionId);
 		}
+		await this.plugin.saveSettings();
+		this.render();
+	}
+
+	private async toggleNotesSubfoldersCollapsed(): Promise<void> {
+		this.plugin.settings.notesSubfoldersCollapsed =
+			!this.plugin.settings.notesSubfoldersCollapsed;
 		await this.plugin.saveSettings();
 		this.render();
 	}
@@ -2115,14 +2268,17 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private smartFolderSummary(smartFolder: SmartFolder): string {
+		const count = this.countSmartFolderNotes(smartFolder);
+		return `${count} ${count === 1 ? "note" : "notes"}`;
+	}
+
+	private countSmartFolderNotes(smartFolder: SmartFolder): number {
 		const pinnedPaths = getBookmarkedFilePaths(this.app);
-		const count = this.app.vault
+		return this.app.vault
 			.getFiles()
 			.filter((file) =>
 				noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file, pinnedPaths), smartFolder)
-			)
-			.length;
-		return `${count} ${count === 1 ? "note" : "notes"}`;
+			).length;
 	}
 
 	private relativeParentPath(scopePath: string, file: TFile): string {
