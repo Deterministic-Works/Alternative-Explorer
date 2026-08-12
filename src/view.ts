@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, Scope, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import {
 	FolderSortBy,
@@ -38,6 +38,8 @@ import {
 } from "./folder-sections";
 import { buildNoteGroups } from "./note-groups";
 import { nextAvailablePath } from "./create-paths";
+import { canOpenInObsidian, openWithDefaultApp } from "./file-openable";
+import { iconForFileExtension } from "./file-type-icons";
 import { SectionNameModal } from "./section-name-modal";
 import { ConfirmModal } from "./confirm-modal";
 import { SmartFolderModal } from "./smart-folder-modal";
@@ -87,6 +89,7 @@ export class AlternativeExplorerView extends ItemView {
 	private draggedSectionId: string | null = null;
 	private folderStatCache = new Map<string, { mtime: number; ctime: number }>();
 	private revealFilePath: string | null = null;
+	private selectedFilePath: string | null = null;
 
 	constructor(leaf: WorkspaceLeaf, private readonly plugin: AlternativeExplorerPlugin) {
 		super(leaf);
@@ -106,7 +109,10 @@ export class AlternativeExplorerView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.contentEl.addClass("alternative-explorer-view");
+		this.scope = new Scope(this.app.scope);
 		this.registerInteractions();
+		this.registerNoteHotkeys();
+		this.registerWorkspaceSelectionSync();
 		this.render();
 	}
 
@@ -114,6 +120,7 @@ export class AlternativeExplorerView extends ItemView {
 		this.draggedFolderPath = null;
 		this.draggedSectionId = null;
 		this.folderStatCache.clear();
+		this.selectedFilePath = null;
 	}
 
 	render(): void {
@@ -128,6 +135,7 @@ export class AlternativeExplorerView extends ItemView {
 			this.renderFoldersPane(browser);
 		}
 
+		this.applySelectionHighlight();
 		this.applyRevealHighlight();
 	}
 
@@ -258,8 +266,12 @@ export class AlternativeExplorerView extends ItemView {
 			const fileControl = element.closest<HTMLButtonElement>("button[data-file-path]");
 			if (fileControl?.dataset.filePath) {
 				event.preventDefault();
-				void this.openFile(fileControl.dataset.filePath);
+				void this.handleNoteClick(fileControl.dataset.filePath);
 			}
+		});
+
+		this.registerDomEvent(this.contentEl, "keydown", (event) => {
+			this.handleNoteKeydown(event);
 		});
 
 		this.registerDomEvent(this.contentEl, "contextmenu", (event) => {
@@ -810,13 +822,17 @@ export class AlternativeExplorerView extends ItemView {
 		for (const group of groups) {
 			const section = container.createEl("section", {
 				cls: "alternative-explorer-section alternative-explorer-file-section",
-				attr: { "aria-label": group.label },
 			});
 			const showHeader = !(group.id === "all" && groups.length === 1);
 			if (showHeader) {
+				const headingId = `alternative-explorer-group-${group.id}`;
+				section.setAttr("aria-labelledby", headingId);
 				const sectionHeader = section.createDiv({ cls: "alternative-explorer-section-header" });
 				const label = sectionHeader.createDiv({ cls: "alternative-explorer-section-label" });
-				label.createEl("h2", { text: group.label });
+				label.createEl("h2", {
+					text: group.label,
+					attr: { id: headingId },
+				});
 				label.createSpan({
 					text: String(group.notes.length),
 					attr: {
@@ -1060,8 +1076,10 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private renderNoteRow(list: HTMLElement, file: TFile, pinned: boolean): void {
+		const activePath = this.selectedFilePath ?? this.app.workspace.getActiveFile()?.path ?? null;
+		const isActive = activePath === file.path;
 		const row = list.createEl("button", {
-			cls: `alternative-explorer-file-row${pinned ? " is-pinned" : ""}`,
+			cls: `alternative-explorer-file-row${pinned ? " is-pinned" : ""}${isActive ? " is-active" : ""}`,
 			attr: {
 				type: "button",
 				"data-file-path": file.path,
@@ -1069,7 +1087,7 @@ export class AlternativeExplorerView extends ItemView {
 			},
 		});
 		const icon = row.createSpan({ cls: "alternative-explorer-row-icon" });
-		setIcon(icon, pinned ? "pin" : "file-text");
+		setIcon(icon, pinned ? "pin" : iconForFileExtension(file.extension));
 		const copy = row.createSpan({ cls: "alternative-explorer-file-copy" });
 		copy.createSpan({ cls: "alternative-explorer-file-title", text: file.basename });
 		const parent = file.parent;
@@ -2003,8 +2021,260 @@ export class AlternativeExplorerView extends ItemView {
 	private async openFile(path: string): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile)) return;
-		const leaf = this.app.workspace.getLeaf(false);
-		await leaf.openFile(file);
+		this.selectedFilePath = file.path;
+		this.applySelectionHighlight();
+		if (canOpenInObsidian(this.app, file)) {
+			await this.openInWorkspace(file);
+			return;
+		}
+		openWithDefaultApp(this.app, file.path);
+	}
+
+	private async handleNoteClick(path: string): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return;
+
+		const alreadySelected = this.selectedFilePath === path;
+		if (canOpenInObsidian(this.app, file)) {
+			this.selectedFilePath = path;
+			this.applySelectionHighlight();
+			// Keep explorer focused so Up/Down navigation continues after click.
+			await this.openInWorkspace(file, { focusEditor: false });
+			return;
+		}
+
+		if (alreadySelected) {
+			openWithDefaultApp(this.app, path);
+			return;
+		}
+
+		this.selectedFilePath = path;
+		this.applySelectionHighlight();
+		this.focusNoteRow(path);
+	}
+
+	private registerNoteHotkeys(): void {
+		if (!this.scope) return;
+
+		this.scope.register([], "ArrowDown", (event) => {
+			if (!this.handleNoteArrowNavigation(1)) return;
+			event.preventDefault();
+			return false;
+		});
+		this.scope.register([], "ArrowUp", (event) => {
+			if (!this.handleNoteArrowNavigation(-1)) return;
+			event.preventDefault();
+			return false;
+		});
+		this.scope.register([], "Enter", (event) => {
+			if (!this.handleNoteEnter()) return;
+			event.preventDefault();
+			return false;
+		});
+	}
+
+	private handleNoteKeydown(event: KeyboardEvent): void {
+		const key = event.key;
+		if (key === "ArrowDown") {
+			if (!this.handleNoteArrowNavigation(1)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
+		if (key === "ArrowUp") {
+			if (!this.handleNoteArrowNavigation(-1)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			return;
+		}
+		if (key === "Enter") {
+			if (!this.handleNoteEnter()) return;
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	}
+
+	/** Returns false when the event should be ignored. */
+	private handleNoteArrowNavigation(delta: 1 | -1): boolean {
+		if (this.plugin.settings.pane !== "notes") return false;
+
+		const active = document.activeElement;
+		if (
+			active instanceof HTMLElement &&
+			active.closest("input, textarea, select, [contenteditable='true']")
+		) {
+			return false;
+		}
+
+		const rows = this.getNoteRows();
+		if (rows.length === 0) return false;
+
+		const currentIndex = this.resolveNoteRowIndex(rows);
+		const nextIndex =
+			delta > 0
+				? Math.min((currentIndex < 0 ? -1 : currentIndex) + 1, rows.length - 1)
+				: Math.max(currentIndex < 0 ? rows.length - 1 : currentIndex - 1, 0);
+		const nextRow = rows[nextIndex];
+		const nextPath = nextRow?.dataset.filePath;
+		if (!nextPath || !nextRow) return false;
+
+		this.selectedFilePath = nextPath;
+		this.applySelectionHighlight();
+		nextRow.focus({ preventScroll: true });
+		nextRow.scrollIntoView({ block: "nearest" });
+
+		const file = this.app.vault.getAbstractFileByPath(nextPath);
+		if (file instanceof TFile && canOpenInObsidian(this.app, file)) {
+			void this.openInWorkspace(file, { focusEditor: false });
+		}
+		return true;
+	}
+
+	/** Returns false when the event should be ignored. */
+	private handleNoteEnter(): boolean {
+		if (this.plugin.settings.pane !== "notes") return false;
+
+		const active = document.activeElement;
+		if (
+			active instanceof HTMLElement &&
+			active.closest("input, textarea, select, [contenteditable='true']")
+		) {
+			return false;
+		}
+
+		const focusedRow =
+			active instanceof HTMLElement
+				? active.closest<HTMLButtonElement>(
+						"button.alternative-explorer-file-row[data-file-path]"
+					)
+				: null;
+		const path = focusedRow?.dataset.filePath ?? this.selectedFilePath;
+		if (!path) return false;
+
+		void this.confirmOpenNote(path, { focusEditor: true });
+		return true;
+	}
+
+	private async confirmOpenNote(
+		path: string,
+		options: { focusEditor: boolean } = { focusEditor: true }
+	): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) return;
+
+		this.selectedFilePath = path;
+		this.applySelectionHighlight();
+		if (canOpenInObsidian(this.app, file)) {
+			await this.openInWorkspace(file, options);
+			return;
+		}
+		openWithDefaultApp(this.app, path);
+	}
+
+	private async openInWorkspace(
+		file: TFile,
+		options: { focusEditor: boolean } = { focusEditor: true }
+	): Promise<void> {
+		const leaf = this.resolveLeafForOpen();
+		await leaf.openFile(file, { active: true });
+		if (!options.focusEditor) {
+			// openFile may focus the editor asynchronously; reclaim explorer focus after.
+			window.setTimeout(() => {
+				this.app.workspace.setActiveLeaf(this.leaf, { focus: true });
+				this.focusNoteRow(file.path);
+			}, 0);
+		}
+	}
+
+	private resolveLeafForOpen(): WorkspaceLeaf {
+		const current =
+			this.app.workspace.getMostRecentLeaf(this.app.workspace.rootSplit) ??
+			this.app.workspace.getLeaf(false);
+		if (current === this.leaf) {
+			return this.app.workspace.getLeaf(true);
+		}
+		if (current.getViewState().pinned) {
+			return this.app.workspace.getLeaf(true);
+		}
+		return current;
+	}
+
+	private registerWorkspaceSelectionSync(): void {
+		this.registerEvent(
+			this.app.workspace.on("file-open", (file) => {
+				if (this.plugin.settings.pane !== "notes") return;
+				if (!(file instanceof TFile)) return;
+				const rows = this.getNoteRows();
+				if (!rows.some((row) => row.dataset.filePath === file.path)) return;
+				this.selectedFilePath = file.path;
+				this.applySelectionHighlight();
+			})
+		);
+	}
+
+	private getNoteRows(): HTMLButtonElement[] {
+		return Array.from(
+			this.contentEl.querySelectorAll<HTMLButtonElement>(
+				"button.alternative-explorer-file-row[data-file-path]"
+			)
+		);
+	}
+
+	private resolveNoteRowIndex(rows: HTMLButtonElement[]): number {
+		const selected = this.selectedFilePath;
+		if (selected) {
+			const selectedIndex = rows.findIndex((row) => row.dataset.filePath === selected);
+			if (selectedIndex >= 0) return selectedIndex;
+		}
+
+		const focused = document.activeElement;
+		if (focused instanceof HTMLElement) {
+			const focusedRow = focused.closest<HTMLButtonElement>(
+				"button.alternative-explorer-file-row[data-file-path]"
+			);
+			if (focusedRow) {
+				const focusedIndex = rows.indexOf(focusedRow);
+				if (focusedIndex >= 0) return focusedIndex;
+			}
+		}
+
+		const activePath = this.activeNotePathInList(rows);
+		if (activePath) {
+			return rows.findIndex((row) => row.dataset.filePath === activePath);
+		}
+
+		return -1;
+	}
+
+	private activeNotePathInList(rows: HTMLButtonElement[]): string | null {
+		const active = this.app.workspace.getActiveFile();
+		if (!(active instanceof TFile)) return null;
+		return rows.some((row) => row.dataset.filePath === active.path) ? active.path : null;
+	}
+
+	private focusNoteRow(path: string): void {
+		const row = this.findNoteRow(path);
+		row?.focus({ preventScroll: true });
+		row?.scrollIntoView({ block: "nearest" });
+	}
+
+	private findNoteRow(path: string): HTMLButtonElement | null {
+		const escaped =
+			typeof CSS !== "undefined" && typeof CSS.escape === "function"
+				? CSS.escape(path)
+				: path.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+		return this.contentEl.querySelector<HTMLButtonElement>(
+			`button.alternative-explorer-file-row[data-file-path="${escaped}"]`
+		);
+	}
+
+	private applySelectionHighlight(): void {
+		const activePath =
+			this.selectedFilePath ?? this.app.workspace.getActiveFile()?.path ?? null;
+		for (const row of this.getNoteRows()) {
+			const isActive = row.dataset.filePath === activePath;
+			row.toggleClass("is-active", isActive);
+		}
 	}
 
 	private showNoteContextMenu(event: MouseEvent, path: string): void {
