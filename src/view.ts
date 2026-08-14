@@ -1019,7 +1019,7 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private folderNoteCountLabel(folder: TFolder): string {
-		const count = this.getFiles(folder, true).length;
+		const count = this.listFilesInFolder(folder, true).length;
 		return String(count);
 	}
 
@@ -2741,7 +2741,7 @@ export class AlternativeExplorerView extends ItemView {
 	private getNotesForScope(): TFile[] {
 		const scope = this.plugin.settings.notesScope;
 		if (scope === "all") {
-			return this.app.vault.getFiles();
+			return this.listFilesInFolder(this.app.vault.getRoot(), true);
 		}
 
 		if (isSmartFolderScope(scope)) {
@@ -2751,8 +2751,7 @@ export class AlternativeExplorerView extends ItemView {
 				: undefined;
 			if (!smartFolder) return [];
 			const pinnedPaths = getBookmarkedFilePaths(this.app);
-			return this.app.vault
-				.getFiles()
+			return this.listFilesInFolder(this.app.vault.getRoot(), true)
 				.filter((file) =>
 					noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file, pinnedPaths), smartFolder)
 				);
@@ -2763,7 +2762,7 @@ export class AlternativeExplorerView extends ItemView {
 			return [];
 		}
 
-		return this.getFiles(folder, this.plugin.settings.recursive);
+		return this.listFilesInFolder(folder, this.plugin.settings.recursive);
 	}
 
 	private toSmartFolderNoteSnapshot(
@@ -2787,7 +2786,7 @@ export class AlternativeExplorerView extends ItemView {
 		};
 	}
 
-	private getFiles(folder: TFolder, recursive: boolean): TFile[] {
+	private listFilesInFolder(folder: TFolder, recursive: boolean): TFile[] {
 		const files: TFile[] = [];
 		const visit = (current: TFolder): void => {
 			for (const child of current.children) {
@@ -2852,7 +2851,7 @@ export class AlternativeExplorerView extends ItemView {
 	}
 
 	private allNotesSummary(): string {
-		const count = this.app.vault.getFiles().length;
+		const count = this.listFilesInFolder(this.app.vault.getRoot(), true).length;
 		return `${count} ${count === 1 ? "note" : "notes"}`;
 	}
 
@@ -2863,8 +2862,7 @@ export class AlternativeExplorerView extends ItemView {
 
 	private countSmartFolderNotes(smartFolder: SmartFolder): number {
 		const pinnedPaths = getBookmarkedFilePaths(this.app);
-		return this.app.vault
-			.getFiles()
+		return this.listFilesInFolder(this.app.vault.getRoot(), true)
 			.filter((file) =>
 				noteMatchesSmartFolder(this.toSmartFolderNoteSnapshot(file, pinnedPaths), smartFolder)
 			).length;
