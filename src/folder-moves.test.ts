@@ -36,6 +36,7 @@ describe("resolveVaultFolderDrop", () => {
 		unassignedSectionId: "",
 		sameParentCustomSort: true,
 		sectionId: "",
+		sourceSectionId: "",
 	};
 
 	it("moves into another vault folder", () => {
@@ -115,8 +116,28 @@ describe("resolveVaultFolderDrop", () => {
 				dropKind: "folder",
 				targetPath: "Projects",
 				targetParentPath: "/",
+				sourceSectionId: "",
 			})
 		).toBeNull();
+	});
+
+	it("allows root cross-section drops without custom sort", () => {
+		expect(
+			resolveVaultFolderDrop({
+				...base,
+				sameParentCustomSort: false,
+				position: "before",
+				dropKind: "folder",
+				targetPath: "Projects",
+				targetParentPath: "/",
+				sectionId: "work",
+				sourceSectionId: "",
+			})
+		).toEqual({
+			kind: "display",
+			position: "before",
+			targetPath: "Projects",
+		});
 	});
 
 	it("moves as a sibling when parents differ", () => {
@@ -130,6 +151,7 @@ describe("resolveVaultFolderDrop", () => {
 				targetPath: "Inbox",
 				targetParentPath: "/",
 				sectionId: "work",
+				sourceSectionId: "",
 			})
 		).toEqual({
 			kind: "vault-move",
@@ -149,6 +171,7 @@ describe("resolveVaultFolderDrop", () => {
 				position: "after",
 				dropKind: "zone",
 				sectionId: "life",
+				sourceSectionId: "",
 			})
 		).toEqual({
 			kind: "vault-move",
@@ -166,6 +189,7 @@ describe("resolveVaultFolderDrop", () => {
 				position: "before",
 				dropKind: "zone",
 				sectionId: "",
+				sourceSectionId: "work",
 			})
 		).toEqual({
 			kind: "display",

@@ -1940,6 +1940,9 @@ export class AlternativeExplorerView extends ItemView {
 			targetParentPath: drop.parentPath,
 			allowsInto: drop.allowsInto === true,
 			sectionId: drop.sectionId,
+			sourceSectionId:
+				findSectionIdForFolder(this.plugin.settings.folderSections, folderPath) ??
+				UNASSIGNED_SECTION_ID,
 			sameParentCustomSort:
 				drop.kind === "folder" &&
 				(drop.parentPath ?? root.path) === sourceParentPath &&

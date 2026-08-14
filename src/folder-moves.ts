@@ -43,6 +43,8 @@ type ResolveVaultFolderDropInput = {
 	/** Whether the target row allows an into drop (vault folder, not smart). */
 	allowsInto?: boolean;
 	sectionId: string;
+	/** Section currently owning the dragged root folder; unassigned id when none. */
+	sourceSectionId: string;
 	/** True when same-parent custom sort reorder is allowed. */
 	sameParentCustomSort: boolean;
 	/** Section id used for "unassigned" (empty string in the view). */
@@ -66,6 +68,7 @@ export function resolveVaultFolderDrop(
 		targetParentPath,
 		allowsInto,
 		sectionId,
+		sourceSectionId,
 		sameParentCustomSort,
 		unassignedSectionId,
 	} = input;
@@ -106,12 +109,23 @@ export function resolveVaultFolderDrop(
 
 	const destParent = targetParentPath ?? rootPath;
 	if (sourceParentPath === destParent) {
-		if (!sameParentCustomSort) return null;
-		return {
-			kind: "display",
-			position,
-			targetPath,
-		};
+		if (sameParentCustomSort) {
+			return {
+				kind: "display",
+				position,
+				targetPath,
+			};
+		}
+		// Without custom sort, same-parent before/after is only useful to change
+		// root section membership by dropping onto a folder in another section.
+		if (sourceParentPath === rootPath && sectionId !== sourceSectionId) {
+			return {
+				kind: "display",
+				position,
+				targetPath,
+			};
+		}
+		return null;
 	}
 
 	if (isInvalidMoveParent(sourcePath, destParent)) return null;
