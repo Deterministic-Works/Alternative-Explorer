@@ -201,28 +201,3 @@ export function buildNoteGroups<T extends NoteLike>(
 
 	return groups;
 }
-
-/**
- * @deprecated Prefer buildNoteGroups. Kept for older call sites/tests during transition.
- */
-export function groupNotesByRecency<T extends { path: string; mtime: number }>(
-	notes: readonly T[],
-	pinnedPaths: ReadonlySet<string>,
-	now: Date = new Date()
-): NoteGroup<T & NoteLike>[] {
-	return buildNoteGroups(
-		notes.map((note) => ({
-			...note,
-			name: note.path.split("/").pop() ?? note.path,
-			ctime: note.mtime,
-		})),
-		{
-			sortBy: "mtime",
-			sortDir: "desc",
-			groupBy: "mtime",
-			groupPinned: true,
-			pinnedPaths,
-			now,
-		}
-	) as NoteGroup<T & NoteLike>[];
-}

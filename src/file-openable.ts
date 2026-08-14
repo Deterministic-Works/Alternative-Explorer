@@ -12,7 +12,7 @@ type AppWithViewRegistry = App & {
 /**
  * True when Obsidian (or a plugin) has a view registered for this file's extension.
  */
-export function canOpenInObsidian(app: App, file: TFile): boolean {
+export function canOpenInObsidian(app: App, file: Pick<TFile, "extension">): boolean {
 	const registry = (app as AppWithViewRegistry).viewRegistry;
 	if (typeof registry?.getTypeByExtension === "function") {
 		const type = registry.getTypeByExtension(file.extension);

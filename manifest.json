@@ -1,10 +1,10 @@
 {
 	"id": "alternative-explorer",
 	"name": "Alternative Explorer",
-	"version": "0.9.8",
-	"minAppVersion": "1.5.0",
+	"version": "1.0.0",
+	"minAppVersion": "1.7.2",
 	"description": "Browse folders and notes in an Apple Notes–style sidebar that switches between folder and notes lists.",
-	"author": "Deterministic Works",
-	"authorUrl": "https://github.com/Deterministic-Works",
+	"author": "Sunwoo Kwak",
+	"authorUrl": "https://github.com/sunwookwak-polisci",
 	"isDesktopOnly": false
 }

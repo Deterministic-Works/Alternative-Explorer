@@ -1,0 +1,34 @@
+import { defineConfig } from "eslint/config";
+import obsidianmd from "eslint-plugin-obsidianmd";
+import tseslint from "typescript-eslint";
+
+export default defineConfig([
+	{
+		ignores: ["Demo Vault/**", "main.js", "node_modules/**"],
+	},
+	...obsidianmd.configs.recommended,
+	{
+		files: ["**/*.ts"],
+		languageOptions: {
+			parser: tseslint.parser,
+			parserOptions: {
+				projectService: true,
+				tsconfigRootDir: import.meta.dirname,
+			},
+		},
+		rules: {
+			"obsidianmd/settings-tab/prefer-setting-definitions": "off",
+			"obsidianmd/ui/sentence-case": [
+				"warn",
+				{ brands: ["Alternative Explorer", "Bookmarks", "YYYY-MM-DD"] },
+			],
+		},
+	},
+	{
+		files: ["*.mjs"],
+		rules: {
+			"no-undef": "off",
+			"obsidianmd/no-nodejs-modules": "off",
+		},
+	},
+]);

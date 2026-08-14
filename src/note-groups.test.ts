@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNoteGroups, compareNotes, groupNotesByRecency } from "./note-groups";
+import { buildNoteGroups, compareNotes } from "./note-groups";
 
 const NOW = new Date(2026, 7, 9, 15, 30, 0); // Aug 9, 2026 local
 
@@ -150,18 +150,5 @@ describe("buildNoteGroups", () => {
 		);
 
 		expect(groups[0]?.notes.map((item) => item.path)).toEqual(["newer.md", "older.md"]);
-	});
-});
-
-describe("groupNotesByRecency", () => {
-	it("preserves previous default behavior", () => {
-		const today = new Date(2026, 7, 9, 10, 0, 0).getTime();
-		const groups = groupNotesByRecency(
-			[note("a.md", today), note("b.md", today)],
-			new Set(["a.md"]),
-			NOW
-		);
-
-		expect(groups.map((group) => group.id)).toEqual(["pinned", "today"]);
 	});
 });

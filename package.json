@@ -1,13 +1,15 @@
 {
 	"name": "alternative-explorer",
-	"version": "0.9.8",
+	"version": "1.0.0",
 	"description": "An Apple Notes–style sidebar file explorer for Obsidian.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"test": "vitest run",
-		"build": "tsc -noEmit && node esbuild.config.mjs production"
+		"build": "tsc -noEmit && node esbuild.config.mjs production",
+		"lint": "eslint .",
+		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
 	"keywords": [
 		"obsidian",
@@ -15,13 +17,18 @@
 		"file-explorer",
 		"folders"
 	],
-	"author": "Deterministic Works",
+	"author": "Sunwoo Kwak",
+	"repository": "github:sunwookwak-polisci/Alternative-Explorer",
+	"bugs": "https://github.com/sunwookwak-polisci/Alternative-Explorer/issues",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^22.15.17",
 		"esbuild": "^0.25.5",
+		"eslint": "^9.39.5",
+		"eslint-plugin-obsidianmd": "^0.4.1",
 		"obsidian": "^1.13.1",
 		"typescript": "^5.8.3",
+		"typescript-eslint": "^8.67.0",
 		"vitest": "^4.0.18"
 	}
 }

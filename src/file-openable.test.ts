@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { App, TFile } from "obsidian";
 import { canOpenInObsidian, openWithDefaultApp } from "./file-openable";
 
-function file(extension: string): TFile {
-	return { extension } as TFile;
+function file(extension: string): Pick<TFile, "extension"> {
+	return { extension };
 }
 
 describe("canOpenInObsidian", () => {

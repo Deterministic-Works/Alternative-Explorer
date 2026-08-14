@@ -1,78 +1,69 @@
 # Alternative Explorer — cloud agent entry
 
-Operational instructions for agents working from the Git remote (for example Cursor Cloud Agents).
-
-If `AGENTS.md` exists on disk, prefer that file.
+Public operational instructions for agents working from the Git remote. If a local `AGENTS.md` exists, prefer it.
 
 ## Start work
 
 1. Read this file.
-2. Read `feature-plan.md` for intended product behavior. When a README, Obsidian manifest, or package manifest exists, read those for product, release, or build behavior.
-3. Inspect `git status --short`, the relevant diff, and recent commits before editing.
-4. Read the implementation files in scope before deciding on a change.
-5. Preserve unrelated local changes.
+2. Inspect `git status --short`, the relevant diff, remotes, and recent commits.
+3. Read the implementation, tests, manifest, and relevant public documentation before editing.
+4. Preserve unrelated changes and use current files as implementation truth.
 
 ## Knowledge ownership
 
 | Kind | Source of truth |
 |------|-----------------|
-| Implementation behavior | TypeScript, CSS, configuration, and tests (when present) |
-| Intended product features (pre-implementation) | `feature-plan.md` |
-| Product behavior and installation | README (when present) |
-| Plugin identity and release version | Obsidian manifest (when present) |
-| Package version and build commands | Package manifest / scripts (when present) |
-| Obsidian version compatibility | versions mapping file (when present) |
+| Implementation behavior | TypeScript, CSS, configuration, and tests |
+| User-facing behavior | `README.md` |
+| Development workflow | `CONTRIBUTING.md` |
+| Plugin identity and compatibility | `manifest.json` and `versions.json` |
+| Package version and commands | `package.json` and lockfile |
+| Release verification | `.github/workflows/attest-release.yml` |
 
-Do not invent durable product facts in agent notes when they belong in tracked code or public documentation.
+Do not duplicate product facts in agent notes when they belong in tracked code, tests, or public documentation.
 
-## Commands
+## Verified commands
 
 ```bash
-npm install       # install development dependencies
-npm test          # run focused unit tests
-npm run build     # type-check and produce the ignored main.js bundle
-npm run dev       # rebuild main.js in watch mode
-git diff --check  # check patch whitespace
+npm ci
+npm run lint
+npm test
+npm run build
+npm audit
+git diff --check
 ```
 
-Do not edit the generated `main.js` directly.
+Do not edit generated `main.js` directly.
 
 ## Repository map
 
 | Path | Role |
 |------|------|
-| `feature-plan.md` | Intended product features and interaction model (pre-implementation) |
-| `src/main.ts` | Plugin lifecycle, view registration, persisted data, and vault events |
-| `src/create-paths.ts` | Pure helpers for unique note/folder vault paths |
-| `src/view.ts` | Sidebar folders/notes pane switching and note rows |
-| `src/file-type-icons.ts` | Lucide icon names by vault file extension |
-| `src/file-openable.ts` | Whether Obsidian can open a file type; default-app open |
-| `src/note-groups.ts` | Pure pinned/recency grouping for the notes list |
-| `src/bookmarks.ts` | Core Bookmarks plugin file-path reader |
-| `src/folder-order.ts` | Pure folder-order and path-remapping helpers |
-| `src/folder-sections.ts` | Pure folder-section partition, sort, and membership helpers |
-| `src/smart-folders.ts` | Pure smart-folder rule matching helpers |
-| `src/smart-folder-modal.ts` | Create/edit UI for smart folders |
-| `src/confirm-modal.ts` | Confirm dialog for destructive actions |
-| `styles.css` | Narrow sidebar layout and Obsidian-native presentation |
-| `manifest.json` | Plugin identity and Obsidian compatibility |
-| `package.json` | Development dependencies and verified commands |
-| `README.md` | User-facing behavior and local installation |
-| `.gitignore` | Ignores build output and local-only agent/workflow files |
+| `src/main.ts` | Plugin lifecycle, settings migration, persistence, and vault events |
+| `src/view.ts` | Sidebar folder/file navigation and interaction behavior |
+| `src/settings-tab.ts` | Default sorting settings |
+| `src/sort-overrides.ts` | Per-folder and per-scope sort overrides |
+| `src/smart-folders.ts` | Smart-folder rules and matching |
+| `src/bookmarks.ts` | Guarded core Bookmarks integration |
+| `src/file-openable.ts` | Supported-file and operating-system open behavior |
+| `styles.css` | Obsidian-native presentation |
+| `manifest.json` | Plugin identity and minimum Obsidian version |
+| `README.md` | Community Plugins user documentation |
+| `CONTRIBUTING.md` | Development and contribution guidance |
 
-## Engineering guardrails
+## Guardrails
 
-- Keep changes narrowly scoped. Prefer Obsidian plugin patterns once source exists.
-- Do not invent build, test, or release commands; record them only after they exist and have been verified.
-- Do not edit `node_modules/` or generated `main.js` when those appear.
-- Keep tracked product docs accurate when user-visible behavior or installation changes.
-- Keep plugin identity, package, and Obsidian compatibility version files synchronized when changing versions (once those files exist).
-- Do not commit, push, tag, publish a release, change remotes, or transfer repositories unless the user explicitly requests it.
-- Never add credentials or secrets to tracked files.
+- Keep plugin ID `alternative-explorer` stable.
+- Keep package, lockfile, manifest, and versions mapping synchronized.
+- Keep the README concise and user-facing; development material belongs in `CONTRIBUTING.md`.
+- Preserve saved settings when schemas evolve.
+- Keep Bookmarks and operating-system file opening guarded and fail closed when unavailable.
+- Never add credentials, personal vault content, private contact details, or machine-specific paths to tracked files.
+- Do not commit local agent files, handoffs, internal notes, copied release artifacts, or Demo Vault state.
+- Do not change remotes, tags, releases, or Community Plugins metadata without explicit authorization.
 
 ## Completion checks
 
-1. Run verified build/test commands when implementation or build configuration changes; if none are established, say so.
-2. Run `git diff --check`.
-3. Review the complete scoped diff for unrelated changes, secrets, and stale URLs.
-4. Report checks that were not run or did not pass.
+1. Run the relevant verified commands.
+2. Review the complete scoped diff for unrelated changes, secrets, stale URLs, and local-only files.
+3. Confirm metadata remains synchronized and report every check that was not run or did not pass.

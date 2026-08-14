@@ -194,8 +194,8 @@ export class SmartFolderModal extends Modal {
 
 		new Setting(contentEl).setName("Match").addDropdown((dropdown) => {
 			dropdown
-				.addOption("all", "All rules (AND)")
-				.addOption("any", "Any rule (OR)")
+				.addOption("all", "All rules")
+				.addOption("any", "Any rule")
 				.setValue(this.match)
 				.onChange((value) => {
 					this.match = value === "any" ? "any" : "all";
@@ -265,7 +265,7 @@ export class SmartFolderModal extends Modal {
 
 		if (fieldSelectValue(rule.field) === "frontmatter") {
 			setting.addText((text) => {
-				text.setPlaceholder("property").setValue(frontmatterKeyFromField(rule.field));
+				text.setPlaceholder("Property").setValue(frontmatterKeyFromField(rule.field));
 				text.inputEl.addClass("alternative-explorer-smart-frontmatter-key");
 				text.onChange((value) => {
 					rule.field = toField("frontmatter", value);
@@ -397,8 +397,8 @@ export class SmartFolderModal extends Modal {
 					text.inputEl.min = "1";
 					text.inputEl.step = "1";
 					text.inputEl.addClass("alternative-explorer-smart-custom-days");
-					text.inputEl.setAttribute("aria-label", "Last N days");
-					text.inputEl.title = "Last N days";
+					text.inputEl.setAttribute("aria-label", "Last number of days");
+					text.inputEl.title = "Last number of days";
 					text.inputEl.addEventListener("keydown", (event) => {
 						if (event.key === "Enter") {
 							event.preventDefault();

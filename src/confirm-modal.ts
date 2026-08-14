@@ -20,12 +20,12 @@ export class ConfirmModal extends Modal {
 		});
 
 		new Setting(contentEl)
-			.addButton((button) =>
+			.addButton((button) => {
 				button
 					.setButtonText(this.confirmLabel)
-					.setWarning()
-					.onClick(() => this.finish(true))
-			)
+					.onClick(() => this.finish(true));
+				button.buttonEl.addClass("mod-warning");
+			})
 			.addButton((button) =>
 				button.setButtonText("Cancel").onClick(() => this.finish(false))
 			);
