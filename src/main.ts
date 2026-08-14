@@ -323,6 +323,11 @@ export default class AlternativeExplorerPlugin extends Plugin {
 		await this.saveSettings();
 	}
 
+	/** Remap persisted paths after a vault folder rename (idempotent). */
+	async remapFolderPathAfterRename(oldPath: string, newPath: string): Promise<void> {
+		await this.remapFolderPath(oldPath, newPath);
+	}
+
 	removeNoteSortOverrideForSmartFolder(id: string): void {
 		const key = toSmartFolderScope(id);
 		if (!(key in this.settings.noteSortOverrides)) return;

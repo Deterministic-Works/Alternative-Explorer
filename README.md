@@ -10,6 +10,7 @@ Alternative Explorer is a focused, Apple Notes–style sidebar for browsing fold
 
 - Move between an expandable folder tree and the selected folder's files in one left-sidebar view.
 - See immediate subfolders above a folder's files, or include every file below that folder.
+- Drag folders onto other folders to nest them, or onto the vault root list or a section to move them back out—the same parent changes you can make in the default File Explorer.
 - Open **All notes** for a vault-wide list and use **Reveal current note** to return to the active file.
 - Expand or fold the complete folder tree and its sections in one action.
 
@@ -44,10 +45,10 @@ Alternative Explorer is a focused, Apple Notes–style sidebar for browsing fold
 
 ## Good to know
 
-- Sections, smart folders, display ordering, and sorting preferences are stored in plugin settings. They do not rename, move, or create vault folders unless you explicitly use **New folder**.
+- Sections, smart folders, display ordering, and sorting preferences are stored in plugin settings. They do not rename or create vault folders unless you explicitly use **New folder** or drag a folder to a new parent.
 - Pinning uses Obsidian's core Bookmarks plugin. If Bookmarks is disabled, pinned groups are empty and pinning is unavailable.
 - Smart folders are saved searches over file metadata; they do not create folders in the vault.
-- Alternative Explorer creates notes and folders but does not search note contents or move, rename, or delete existing vault files.
+- Alternative Explorer creates notes and folders and can move folders to a new parent by drag-and-drop. It does not search note contents or move, rename, or delete existing notes.
 - The minimum supported Obsidian version is 1.7.2.
 
 ## Acknowledgements
