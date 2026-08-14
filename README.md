@@ -50,6 +50,10 @@ Alternative Explorer is a focused, Apple Notes–style sidebar for browsing fold
 - Alternative Explorer creates notes and folders but does not search note contents or move, rename, or delete existing vault files.
 - The minimum supported Obsidian version is 1.7.2.
 
+## Acknowledgements
+
+Alternative Explorer was inspired by Apple Notes and [Notebook Navigator](https://notebooknavigator.com) ([GitHub](https://github.com/johansan/notebook-navigator)).
+
 ## Support
 
 For bugs or feature requests, [open an issue](https://github.com/sunwookwak-polisci/Alternative-Explorer/issues). Please use synthetic examples rather than private vault content.
