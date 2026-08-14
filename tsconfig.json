@@ -9,6 +9,10 @@
 		"noFallthroughCasesInSwitch": true,
 		"noUncheckedIndexedAccess": true,
 		"moduleResolution": "node",
+		"baseUrl": ".",
+		"paths": {
+			"obsidian": ["node_modules/obsidian/obsidian.d.ts", "types/obsidian-review.d.ts"]
+		},
 		"isolatedModules": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
