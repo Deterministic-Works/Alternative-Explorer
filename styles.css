@@ -492,6 +492,24 @@
 	height: 18px;
 }
 
+.alternative-explorer-folder-row > .alternative-explorer-folder-toggle,
+.alternative-explorer-folder-row > .alternative-explorer-folder-toggle-spacer {
+	flex-basis: 28px;
+	width: 28px;
+	min-width: 28px;
+	height: 28px;
+	min-height: 28px;
+}
+
+.is-mobile .alternative-explorer-folder-row > .alternative-explorer-folder-toggle,
+.is-mobile .alternative-explorer-folder-row > .alternative-explorer-folder-toggle-spacer {
+	flex-basis: var(--touch-size-s, 40px);
+	width: var(--touch-size-s, 40px);
+	min-width: var(--touch-size-s, 40px);
+	height: var(--touch-size-s, 40px);
+	min-height: var(--touch-size-s, 40px);
+}
+
 .alternative-explorer-folder-toggle {
 	padding: 0;
 	color: inherit;
