@@ -503,11 +503,11 @@
 
 .is-mobile .alternative-explorer-folder-row > .alternative-explorer-folder-toggle,
 .is-mobile .alternative-explorer-folder-row > .alternative-explorer-folder-toggle-spacer {
-	flex-basis: 32px;
-	width: 32px;
-	min-width: 32px;
-	height: 32px;
-	min-height: 32px;
+	flex-basis: 26px;
+	width: 26px;
+	min-width: 26px;
+	height: 26px;
+	min-height: 26px;
 }
 
 .alternative-explorer-folder-toggle {
