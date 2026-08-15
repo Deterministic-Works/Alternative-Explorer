@@ -495,7 +495,7 @@ export class AlternativeExplorerView extends ItemView {
 		this.renderNewFolderButton(controls);
 
 		const newSmartFolderButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-new-smart-folder": "true",
@@ -506,7 +506,7 @@ export class AlternativeExplorerView extends ItemView {
 		setIcon(newSmartFolderButton, "sparkles");
 
 		const newSectionButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-new-section": "true",
@@ -521,7 +521,7 @@ export class AlternativeExplorerView extends ItemView {
 		);
 		const sortTitle = `Sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
 		const sortButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-open-folder-sort-menu": "true",
@@ -538,7 +538,7 @@ export class AlternativeExplorerView extends ItemView {
 		const anyExpanded = this.isAnyTreeOrSectionExpanded();
 		const label = anyExpanded ? "Fold all" : "Expand all";
 		const button = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-expand-fold-all": "true",
@@ -551,7 +551,7 @@ export class AlternativeExplorerView extends ItemView {
 
 	private renderRevealButton(controls: HTMLElement): void {
 		const revealButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-reveal-current-note": "true",
@@ -564,7 +564,7 @@ export class AlternativeExplorerView extends ItemView {
 
 	private renderNewNoteButton(controls: HTMLElement): void {
 		const button = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-new-note": "true",
@@ -577,7 +577,7 @@ export class AlternativeExplorerView extends ItemView {
 
 	private renderNewFolderButton(controls: HTMLElement): void {
 		const button = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-new-folder": "true",
@@ -603,7 +603,7 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		const toggle = header.createEl("button", {
-			cls: `alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
+			cls: `clickable-icon alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
 			attr: {
 				type: "button",
 				"data-folder-action": "toggle-section",
@@ -781,7 +781,7 @@ export class AlternativeExplorerView extends ItemView {
 
 		if (hasSubfolders) {
 			const toggleButton = row.createEl("button", {
-				cls: `alternative-explorer-folder-toggle${expanded ? " is-expanded" : ""}`,
+				cls: `clickable-icon alternative-explorer-folder-toggle${expanded ? " is-expanded" : ""}`,
 				attr: {
 					type: "button",
 					"data-folder-action": "toggle",
@@ -932,7 +932,7 @@ export class AlternativeExplorerView extends ItemView {
 		});
 
 		const toggle = sectionHeader.createEl("button", {
-			cls: `alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
+			cls: `clickable-icon alternative-explorer-folder-toggle${collapsed ? "" : " is-expanded"}`,
 			attr: {
 				type: "button",
 				"data-folder-action": "toggle-notes-subfolders",
@@ -1031,7 +1031,7 @@ export class AlternativeExplorerView extends ItemView {
 		const header = container.createEl("header", { cls: "alternative-explorer-header" });
 		const navigation = header.createDiv({ cls: "alternative-explorer-navigation" });
 		const backButton = navigation.createEl("button", {
-			cls: "alternative-explorer-back-button",
+			cls: "clickable-icon alternative-explorer-back-button",
 			attr: {
 				type: "button",
 				"data-folder-action": "back-to-folders",
@@ -1072,7 +1072,7 @@ export class AlternativeExplorerView extends ItemView {
 				this.effectiveFolderSort(notesFolderPath);
 			const folderSortTitle = `Folder sort: ${FOLDER_SORT_BY_LABELS[folderSortBy]} ${folderSortDir === "asc" ? "ascending" : "descending"}`;
 			const folderSortButton = controls.createEl("button", {
-				cls: "alternative-explorer-control-button",
+				cls: "clickable-icon alternative-explorer-control-button",
 				attr: {
 					type: "button",
 					"data-open-folder-sort-menu": "true",
@@ -1089,7 +1089,7 @@ export class AlternativeExplorerView extends ItemView {
 		const { groupBy, groupPinned } = this.plugin.settings;
 		const sortTitle = `Sort: ${SORT_BY_LABELS[sortBy]} ${sortDir === "asc" ? "ascending" : "descending"}`;
 		const sortButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-open-sort-menu": "true",
@@ -1102,7 +1102,7 @@ export class AlternativeExplorerView extends ItemView {
 
 		const groupTitle = `Group: ${GROUP_BY_LABELS[groupBy]}`;
 		const groupButton = controls.createEl("button", {
-			cls: "alternative-explorer-control-button",
+			cls: "clickable-icon alternative-explorer-control-button",
 			attr: {
 				type: "button",
 				"data-open-group-menu": "true",
@@ -1115,7 +1115,7 @@ export class AlternativeExplorerView extends ItemView {
 
 		const pinnedTitle = groupPinned ? "Grouping pinned notes" : "Not grouping pinned notes";
 		const pinnedButton = controls.createEl("button", {
-			cls: `alternative-explorer-control-button alternative-explorer-pin-toggle${groupPinned ? " is-active" : ""}`,
+			cls: `clickable-icon alternative-explorer-control-button alternative-explorer-pin-toggle${groupPinned ? " is-active" : ""}`,
 			attr: {
 				type: "button",
 				"data-group-pinned": String(!groupPinned),
@@ -1133,7 +1133,7 @@ export class AlternativeExplorerView extends ItemView {
 			? "All below — showing notes in this folder and subfolders"
 			: "This folder — showing notes directly in this folder";
 		const button = container.createEl("button", {
-			cls: `alternative-explorer-depth-toggle${recursive ? " is-active" : ""}`,
+			cls: `clickable-icon alternative-explorer-depth-toggle${recursive ? " is-active" : ""}`,
 			attr: {
 				type: "button",
 				"data-recursive": String(!recursive),

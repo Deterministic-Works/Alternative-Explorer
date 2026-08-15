@@ -320,7 +320,7 @@
 	bottom: 0;
 	left: 0;
 	width: 1px;
-	background-color: var(--nav-indentation-guide-color, var(--background-modifier-border));
+	background-color: var(--background-modifier-border);
 	pointer-events: none;
 }
 
