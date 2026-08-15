@@ -40,6 +40,7 @@ Alternative Explorer is an Apple Notes–style sidebar for browsing folders and 
 - Pin notes through Obsidian's core Bookmarks plugin. If Bookmarks is disabled, pinned groups are empty and pinning is unavailable.
 - Vault files that Obsidian cannot open appear in the notes list. A second click or **Enter** opens them in the system default application when available.
 - Alternative Explorer does not search note contents, and it does not rename or delete existing notes.
+- Alternative Explorer has been tested only on macOS, iOS, and iPadOS. Other platforms may work but have not been verified.
 - The minimum supported Obsidian version is 1.7.2.
 
 ## Acknowledgements
