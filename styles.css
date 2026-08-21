@@ -12,7 +12,11 @@
 }
 
 .alternative-explorer-header {
+	position: sticky;
+	top: 0;
+	z-index: 5;
 	padding: 2px 8px 8px;
+	background-color: var(--background-secondary);
 }
 
 .alternative-explorer-navigation,
@@ -510,6 +514,19 @@
 	min-height: 26px;
 }
 
+.is-mobile .alternative-explorer-drag-handle {
+	display: none;
+}
+
+.is-mobile .alternative-explorer-smart-folder-menu {
+	flex: 0 0 auto;
+	width: 26px;
+	min-width: 26px;
+	height: 26px;
+	min-height: 26px;
+	padding: 0;
+}
+
 .alternative-explorer-folder-toggle {
 	padding: 0;
 	color: inherit;
@@ -594,14 +611,6 @@
 	line-height: 1.2;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.alternative-explorer-folder-row .alternative-explorer-folder-meta {
-	display: none;
-}
-
-.alternative-explorer-folder-row.is-smart-row .alternative-explorer-folder-meta {
-	display: block;
 }
 
 .alternative-explorer-row-arrow {
