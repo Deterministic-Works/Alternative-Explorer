@@ -1,14 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+import type { App } from "obsidian";
 import {
 	addRootFileBookmark,
 	bookmarkPathsFingerprint,
 	bookmarkTreeHasFile,
 	collectBookmarkedFilePaths,
+	getBookmarkedFilePaths,
 	removeFileBookmarks,
+	toggleFileBookmark,
 	wrapBookmarksRequestSave,
 	type BookmarkItem,
 	type BookmarksPluginInstance,
 } from "./bookmarks";
+
+function fakeApp(instance: BookmarksPluginInstance | null): App {
+	return {
+		internalPlugins: {
+			getEnabledPluginById: (id: string) => (id === "bookmarks" ? instance : null),
+		},
+	} as unknown as App;
+}
 
 describe("collectBookmarkedFilePaths", () => {
 	it("collects nested file bookmarks and ignores non-file entries", () => {
@@ -143,5 +154,79 @@ describe("removeFileBookmarks", () => {
 			{ type: "file", path: "Notes/b.md", ctime: 1 },
 			{ type: "search", query: "todo" },
 		]);
+	});
+});
+
+describe("getBookmarkedFilePaths", () => {
+	it("reads instance.items even when getBookmarks returns a different list", () => {
+		const items: BookmarkItem[] = [{ type: "file", path: "Notes/a.md" }];
+		const instance: BookmarksPluginInstance = {
+			items,
+			getBookmarks: () => [{ type: "file", path: "Notes/b.md" }],
+		};
+
+		expect(getBookmarkedFilePaths(fakeApp(instance))).toEqual(new Set(["Notes/a.md"]));
+	});
+
+	it("falls back to getBookmarks when items is missing", () => {
+		const instance: BookmarksPluginInstance = {
+			getBookmarks: () => [{ type: "file", path: "Notes/b.md" }],
+		};
+
+		expect(getBookmarkedFilePaths(fakeApp(instance))).toEqual(new Set(["Notes/b.md"]));
+	});
+});
+
+describe("toggleFileBookmark", () => {
+	it("pins a file that is not yet bookmarked", () => {
+		const items: BookmarkItem[] = [];
+		const requestSave = vi.fn();
+		const result = toggleFileBookmark(fakeApp({ items, requestSave }), "Notes/a.md");
+
+		expect(result).toBe("pinned");
+		expect(items).toHaveLength(1);
+		expect(items[0]?.type).toBe("file");
+		expect(items[0]?.path).toBe("Notes/a.md");
+		expect(typeof items[0]?.ctime).toBe("number");
+		expect(requestSave).toHaveBeenCalledTimes(1);
+		expect(bookmarkTreeHasFile(items, "Notes/a.md")).toBe(true);
+	});
+
+	it("unpins a root bookmark", () => {
+		const items: BookmarkItem[] = [{ type: "file", path: "Notes/a.md", ctime: 1 }];
+		const requestSave = vi.fn();
+		const result = toggleFileBookmark(fakeApp({ items, requestSave }), "Notes/a.md");
+
+		expect(result).toBe("unpinned");
+		expect(items).toEqual([]);
+		expect(requestSave).toHaveBeenCalledTimes(1);
+	});
+
+	it("unpins a nested bookmark instead of adding a duplicate root entry", () => {
+		const items: BookmarkItem[] = [
+			{
+				type: "group",
+				items: [{ type: "file", path: "Notes/a.md", ctime: 1 }],
+			},
+		];
+		const requestSave = vi.fn();
+		const result = toggleFileBookmark(fakeApp({ items, requestSave }), "Notes/a.md");
+
+		expect(result).toBe("unpinned");
+		expect(bookmarkTreeHasFile(items, "Notes/a.md")).toBe(false);
+		expect(items).toEqual([{ type: "group", items: [] }]);
+		expect(requestSave).toHaveBeenCalledTimes(1);
+	});
+
+	it("returns null when items is missing", () => {
+		const instance: BookmarksPluginInstance = {
+			getBookmarks: () => [{ type: "file", path: "Notes/a.md" }],
+		};
+
+		expect(toggleFileBookmark(fakeApp(instance), "Notes/a.md")).toBeNull();
+	});
+
+	it("returns null for an empty path", () => {
+		expect(toggleFileBookmark(fakeApp({ items: [] }), "")).toBeNull();
 	});
 });

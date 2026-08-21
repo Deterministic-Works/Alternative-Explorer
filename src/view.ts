@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, Scope, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
+import { ItemView, Menu, Notice, Platform, Scope, TFile, TFolder, WorkspaceLeaf, getAllTags, moment, setIcon } from "obsidian";
 import type AlternativeExplorerPlugin from "./main";
 import {
 	FolderSortBy,
@@ -136,6 +136,14 @@ export class AlternativeExplorerView extends ItemView {
 		this.draggedSectionId = null;
 		this.folderStatCache.clear();
 		this.selectedFilePath = null;
+
+		const remaining = this.app.workspace
+			.getLeavesOfType(VIEW_TYPE_ALTERNATIVE_EXPLORER)
+			.filter((leaf) => leaf !== this.leaf);
+		if (remaining.length === 0 && this.plugin.settings.pane !== "folders") {
+			this.plugin.settings.pane = "folders";
+			await this.plugin.saveSettings();
+		}
 	}
 
 	render(): void {
@@ -227,6 +235,19 @@ export class AlternativeExplorerView extends ItemView {
 			if (newSmartFolderControl) {
 				event.preventDefault();
 				this.createSmartFolder();
+				return;
+			}
+
+			const smartFolderMenuControl = element.closest<HTMLButtonElement>(
+				"button[data-smart-folder-menu]"
+			);
+			if (smartFolderMenuControl?.dataset.smartFolderMenu) {
+				event.preventDefault();
+				this.showSmartFolderContextMenu(
+					event,
+					smartFolderMenuControl.dataset.smartFolderMenu,
+					smartFolderMenuControl
+				);
 				return;
 			}
 
@@ -588,6 +609,10 @@ export class AlternativeExplorerView extends ItemView {
 		setIcon(button, "folder-plus");
 	}
 
+	private folderRowDragAttr(): Record<string, string> {
+		return Platform.isMobile ? {} : { draggable: "true" };
+	}
+
 	private renderFolderSection(
 		list: HTMLElement,
 		root: TFolder,
@@ -597,7 +622,7 @@ export class AlternativeExplorerView extends ItemView {
 		const header = list.createDiv({
 			cls: `alternative-explorer-folder-section-header${collapsed ? "" : " is-expanded"}`,
 			attr: {
-				draggable: "true",
+				...this.folderRowDragAttr(),
 				"data-section-id": folderSection.id,
 			},
 		});
@@ -684,7 +709,7 @@ export class AlternativeExplorerView extends ItemView {
 		const row = list.createDiv({
 			cls: `alternative-explorer-folder-row is-smart-row${selected ? " is-selected" : ""}`,
 			attr: {
-				draggable: "true",
+				...this.folderRowDragAttr(),
 				"data-folder-path": itemKey,
 				"data-smart-folder-id": smartFolder.id,
 				"data-parent-path": parentPath,
@@ -714,6 +739,19 @@ export class AlternativeExplorerView extends ItemView {
 		});
 		const arrow = button.createSpan({ cls: "alternative-explorer-row-arrow" });
 		setIcon(arrow, "chevron-right");
+
+		if (Platform.isMobile) {
+			const menuButton = row.createEl("button", {
+				cls: "clickable-icon alternative-explorer-smart-folder-menu",
+				attr: {
+					type: "button",
+					"data-smart-folder-menu": smartFolder.id,
+					"aria-label": `${smartFolder.name} options`,
+					title: `${smartFolder.name} options`,
+				},
+			});
+			setIcon(menuButton, "ellipsis-vertical");
+		}
 
 		const dragHandle = row.createSpan({
 			cls: "alternative-explorer-drag-handle",
@@ -771,7 +809,7 @@ export class AlternativeExplorerView extends ItemView {
 		const row = list.createDiv({
 			cls: `alternative-explorer-folder-row${selected ? " is-selected" : ""}`,
 			attr: {
-				draggable: "true",
+				...this.folderRowDragAttr(),
 				"data-folder-path": child.path,
 				"data-parent-path": parentPath,
 				"data-section-id": isRootChild ? sectionId : "",
@@ -1745,11 +1783,15 @@ export class AlternativeExplorerView extends ItemView {
 		this.render();
 	}
 
-	private showSmartFolderContextMenu(event: MouseEvent, id: string): void {
+	private showSmartFolderContextMenu(
+		event: MouseEvent,
+		id: string,
+		anchor?: HTMLElement
+	): void {
 		const smartFolder = this.plugin.settings.smartFolders.find((folder) => folder.id === id);
 		if (!smartFolder) return;
 
-		const menu = Menu.forEvent(event);
+		const menu = anchor ? new Menu() : Menu.forEvent(event);
 		menu.addItem((item) => {
 			item
 				.setTitle("Edit rules")
@@ -1816,6 +1858,12 @@ export class AlternativeExplorerView extends ItemView {
 					this.confirmDeleteSmartFolder(id, smartFolder.name);
 				});
 		});
+
+		if (anchor) {
+			const rect = anchor.getBoundingClientRect();
+			menu.showAtPosition({ x: rect.left, y: rect.bottom + 4 });
+			event.stopPropagation();
+		}
 	}
 
 	private async moveSmartFolderToRoot(id: string): Promise<void> {
@@ -2284,8 +2332,7 @@ export class AlternativeExplorerView extends ItemView {
 		if (canOpenInObsidian(this.app, file)) {
 			this.selectedFilePath = path;
 			this.applySelectionHighlight();
-			// Keep explorer focused so Up/Down navigation continues after click.
-			await this.openInWorkspace(file, { focusEditor: false });
+			await this.openInWorkspace(file, { focusEditor: true });
 			return;
 		}
 
