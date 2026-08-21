@@ -77,12 +77,17 @@ function readBookmarkItems(app: App): unknown[] {
 		return [];
 	}
 
+	// Prefer the live `items` tree so pin detection and toggle mutate the same list.
+	if (Array.isArray(instance.items)) {
+		return instance.items;
+	}
+
 	if (typeof instance.getBookmarks === "function") {
 		const bookmarks = instance.getBookmarks();
 		return Array.isArray(bookmarks) ? bookmarks : [];
 	}
 
-	return Array.isArray(instance.items) ? instance.items : [];
+	return [];
 }
 
 /** Returns bookmarked file paths from Obsidian's core Bookmarks plugin. */
