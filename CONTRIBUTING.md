@@ -20,6 +20,25 @@ Keep changes narrowly scoped. Update `README.md` when a change affects user-visi
 
 Agent instructions for work from this repository are in [AGENTS-cloud.md](AGENTS-cloud.md).
 
+## Testing a local build
+
+Obsidian loads the plugin from the vault folder, so you can try a branch in a private vault without publishing a Community Plugins release. Do not bump `manifest.json` or `versions.json` for this.
+
+1. Check out the branch and run `npm install` then `npm run build`. That writes gitignored `main.js` next to `manifest.json` and `styles.css`.
+2. Copy those three files over the installed plugin:
+
+```
+<vault>/.obsidian/plugins/alternative-explorer/main.js
+<vault>/.obsidian/plugins/alternative-explorer/manifest.json
+<vault>/.obsidian/plugins/alternative-explorer/styles.css
+```
+
+3. In Obsidian, reload Community plugins (or restart the app). Keep Restricted mode off and Alternative Explorer enabled. Plugin settings in `data.json` are left alone.
+
+To skip the copy step, symlink the clone to that plugin folder and run `npm run build` or `npm run dev`. The plugin id is the same as the Community Plugins listing.
+
+On iOS or iPadOS, put the same three files in that vault's `plugins/alternative-explorer/` (Obsidian Sync, iCloud, or Files), then force-quit and reopen Obsidian so it reloads the bundle.
+
 ## Demo Vault and screenshot
 
 `Demo Vault/` is a local-only, ignored Obsidian vault used for smoke testing and the Community Plugins listing screenshot. Never force-add it or commit its notes, settings, workspace state, plugin data, or copied release artifacts.
